@@ -1386,7 +1386,7 @@ if __name__ == '__main__':
                           cleaned_measurement_radius=0.18, minimum_CCI=0.3, min_tree_volume=0.005,
                           Canopy_coverage_resolution=0.5, ground_veg_cutoff_height=3, canopy_mode='continuous',
                           Site='not_specified', PlotID='not_specified', UTM_zone_number=50, UTM_zone_letter=None,
-                          UTM_is_north=False, run_from_start=1)
+                          UTM_is_north=False, run_from_start=1, filter_noise=0)
 
         parameters['input_point_cloud'] = file
         measure1 = MeasureTree(parameters)

@@ -6,7 +6,7 @@ import numpy as np
 import glob
 import pandas as pd
 from preprocessing import Preprocessing
-from train import Net
+from model import Net
 from sklearn.neighbors import NearestNeighbors
 from scipy import spatial
 import os
@@ -19,6 +19,8 @@ class TestingDataset(Dataset, ABC):
         self.filenames = glob.glob(root_dir + dataset_name + '*.npy')
         self.device = device
         self.points_per_box = points_per_box
+        self.sem_seg_end_time = None
+        self.output = None
 
     def __len__(self):
         return len(self.filenames)
@@ -45,6 +47,38 @@ def assign_labels_to_original_point_cloud(original, labeled, label_index):
     return original
 
 
+def subsample_point_cloud(X, min_spacing):
+    print("Subsampling...")
+    neighbours = NearestNeighbors(n_neighbors=2, algorithm='kd_tree', metric='euclidean').fit(X[:, :3])
+    distances, indices = neighbours.kneighbors(X[:, :3])
+    X_keep = X[distances[:, 1] >= min_spacing]
+    i1 = [distances[:, 1] < min_spacing][0]
+    i2 = [X[indices[:, 0], 2] < X[indices[:, 1], 2]][0]
+    X_check = X[np.logical_and(i1, i2)]
+
+    while np.shape(X_check)[0] > 1:
+        neighbours = NearestNeighbors(n_neighbors=2, algorithm='kd_tree', metric='euclidean').fit(X_check[:, :3])
+        distances, indices = neighbours.kneighbors(X_check[:, :3])
+        X_keep = np.vstack((X_keep, X_check[distances[:, 1] >= min_spacing, :]))
+        i1 = [distances[:, 1] < min_spacing][0]
+        i2 = [X_check[indices[:, 0], 2] < X_check[indices[:, 1], 2]][0]
+        X_check = X_check[np.logical_and(i1, i2)]
+    # X = np.delete(X,np.unique(indices[distances[:,1]<min_spacing]),axis=0)
+    X = X_keep
+    return X
+
+
+def choose_most_confident_label(point_cloud, original_point_cloud):
+    print("Choosing most confident labels...")
+    neighbours = NearestNeighbors(n_neighbors=16, algorithm='kd_tree', metric='euclidean', radius=0.05).fit(
+            point_cloud[:, :3])
+    _, indices = neighbours.kneighbors(original_point_cloud[:, :3])
+    labels = np.zeros((original_point_cloud.shape[0], 5))
+    labels[:, 4] = np.argmax(np.median(point_cloud[indices][:, :, -4:], axis=1), axis=1)
+    original_point_cloud = np.hstack((original_point_cloud, np.atleast_2d(labels[:, -1]).T))
+    return original_point_cloud
+
+
 class SemanticSegmentation:
     def __init__(self, parameters):
         self.parameters = parameters
@@ -53,6 +87,11 @@ class SemanticSegmentation:
         self.point_cloud_filename = self.parameters['input_point_cloud'][:-4] + '_out'
         self.make_folder_structure()
         self.output_dir = None
+        self.sem_seg_start_time = None
+        self.output_point_cloud = None
+        self.sem_seg_end_time = None
+        self.sem_seg_total_time = None
+        self.output = None
 
     def make_folder_structure(self):
         if not os.path.isdir(self.directory + "data/original_point_clouds"):
@@ -85,56 +124,10 @@ class SemanticSegmentation:
         preprocessing.preprocess_point_cloud()
         return
 
-    def subsample_point_cloud(self, X, min_spacing):
-        print("Subsampling...")
-        neighbours = NearestNeighbors(n_neighbors=2, algorithm='kd_tree', metric='euclidean').fit(X[:, :3])
-        distances, indices = neighbours.kneighbors(X[:, :3])
-        X_keep = X[distances[:, 1] >= min_spacing]
-        i1 = [distances[:, 1] < min_spacing][0]
-        i2 = [X[indices[:, 0], 2] < X[indices[:, 1], 2]][0]
-        X_check = X[np.logical_and(i1, i2)]
-
-        while np.shape(X_check)[0] > 1:
-            neighbours = NearestNeighbors(n_neighbors=2, algorithm='kd_tree', metric='euclidean').fit(X_check[:, :3])
-            distances, indices = neighbours.kneighbors(X_check[:, :3])
-            X_keep = np.vstack((X_keep, X_check[distances[:, 1] >= min_spacing, :]))
-            i1 = [distances[:, 1] < min_spacing][0]
-            i2 = [X_check[indices[:, 0], 2] < X_check[indices[:, 1], 2]][0]
-            X_check = X_check[np.logical_and(i1, i2)]
-        # X = np.delete(X,np.unique(indices[distances[:,1]<min_spacing]),axis=0)
-        X = X_keep
-        return X
-
-    def choose_most_confident_label(self, point_cloud, original_point_cloud):
-        # TODO work on checking this. There may be considerable improvements possible.
-        print("Choosing most confident labels...")
-        neighbours = NearestNeighbors(n_neighbors=16, algorithm='kd_tree', metric='euclidean', radius=0.05).fit(
-                point_cloud[:, :3])
-        _, indices = neighbours.kneighbors(original_point_cloud[:, :3])
-        labels = np.zeros((original_point_cloud.shape[0], 5))
-        # labels[:,0] = np.argmax(np.max(point_cloud[indices][:,:,-4:],axis=1),axis=1)
-        labels[:, 4] = np.argmax(np.median(point_cloud[indices][:, :, -4:], axis=1), axis=1)
-        # labels[:,:4] = np.median(point_cloud[indices][:,:,-4:],axis=1)
-        # labels[:,1] = np.argmax(np.max(point_cloud[indices][:,:,-4:],axis=1),axis=1)
-        original_point_cloud = np.hstack((original_point_cloud, np.atleast_2d(labels[:, -1]).T))
-
-        # neighbours = NearestNeighbors(n_neighbors=20, algorithm='kd_tree',metric='euclidean').fit(point_cloud[:,:3])
-        # _, indices = neighbours.kneighbors(point_cloud[:,:3])
-        # labels = np.zeros((point_cloud.shape[0],2))
-        # labels[:,0] = np.argmax(np.max(point_cloud[indices][:,:,-4:],axis=1),axis=1)
-        # labels[:,0] = np.argmax(np.median(point_cloud[indices][:,:,-6:-2],axis=1),axis=1)
-        # labels[:,1] = np.argmax(np.max(point_cloud[indices][:,:,-6:-2],axis=1),axis=1)
-        # point_cloud = np.hstack((point_cloud,labels))
-
-        # _,indices = np.unique(point_cloud[:,:3],axis=0,return_index=True)
-        # return point_cloud[indices]
-        return original_point_cloud
-
     def inference(self):
         self.sem_seg_start_time = time.time()
         test_dataset = TestingDataset(dataset_name=self.parameters['fileset'],
-                                      root_dir=self.parameters['directory'] + "data/working_directory/" +
-                                               self.parameters['input_point_cloud'][:-4] + '/',
+                                      root_dir=self.parameters['directory'] + "data/working_directory/" + self.parameters['input_point_cloud'][:-4] + '/',
                                       points_per_box=self.parameters['max_points_per_box'],
                                       device=self.device)
 
@@ -142,8 +135,9 @@ class SemanticSegmentation:
                                  num_workers=0, pin_memory=True)
 
         global_shift = np.loadtxt(
-            self.parameters['directory'] + "data/working_directory/" + self.parameters['input_point_cloud'][
-                                                                       :-4] + '/' + 'global_shift.csv', dtype='float64')
+                self.parameters['directory'] + "data/working_directory/" + self.parameters['input_point_cloud'][
+                                                                           :-4] + '/' + 'global_shift.csv',
+                dtype='float64')
         print("Global shift:", global_shift)
 
         model = Net(num_classes=4).to(self.device)
@@ -156,7 +150,6 @@ class SemanticSegmentation:
                 outshape = np.shape(data.extra_info.cpu().detach())[1]
                 break
             self.output_point_cloud = np.zeros((0, 3 + outshape + 4))
-            # output_point_cloud = np.zeros((0,3+outshape+5))
 
             for i, data in enumerate(test_loader):  # , 0): testing without this
                 print(i * self.parameters['batch_size'], '/', num_boxes)
@@ -177,21 +170,20 @@ class SemanticSegmentation:
 
         print("Loading original point cloud...")
         original_point_cloud = np.array(pd.read_csv(
-            self.directory + "data/original_point_clouds/" + self.parameters['input_point_cloud'][:-4] + '.csv',
-            header=None, index_col=None, delim_whitespace=True))
+                self.directory + "data/original_point_clouds/" + self.parameters['input_point_cloud'][:-4] + '.csv',
+                header=None, index_col=None, delim_whitespace=True))
         original_point_cloud = original_point_cloud[:, :3]
         original_point_cloud[:, :3] = original_point_cloud[:, :3] - global_shift
         if self.parameters['subsample']:
-            original_point_cloud = self.subsample_point_cloud(original_point_cloud,
-                                                              self.parameters['subsampling_min_spacing'])
-        self.output = np.asarray(self.choose_most_confident_label(self.output_point_cloud, original_point_cloud),
-                                 dtype='float64')
+            original_point_cloud = subsample_point_cloud(original_point_cloud, self.parameters['subsampling_min_spacing'])
+
+        self.output = np.asarray(choose_most_confident_label(self.output_point_cloud, original_point_cloud), dtype='float64')
         self.output[:, :3] = self.output[:, :3] + global_shift
         print("Saving...")
         pd.DataFrame(self.output).to_csv(
-            self.parameters['directory'] + "data/segmented_point_clouds/" + self.parameters['input_point_cloud'][
-                                                                            :-4] + '_out' + '.csv', header=None,
-            index=None, sep=' ')
+                self.parameters['directory'] + "data/segmented_point_clouds/" + self.parameters['input_point_cloud'][
+                                                                                :-4] + '_out' + '.csv', header=None,
+                index=None, sep=' ')
         print("Saved")
         self.sem_seg_end_time = time.time()
         self.sem_seg_total_time = self.sem_seg_end_time - self.sem_seg_start_time

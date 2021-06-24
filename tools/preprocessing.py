@@ -9,26 +9,34 @@ import matplotlib
 from scipy import spatial
 from sklearn.neighbors import NearestNeighbors
 import threading
-from tools import load_file, save_file
+from tools import load_file, save_file, make_folder_structure
+import os
 
 
 class Preprocessing:
     def __init__(self, parameters):
         self.preprocessing_time_start = time.time()
         self.parameters = parameters
-        self.directory = parameters['directory']
+        self.filename = self.parameters['input_point_cloud'].replace('\\', '/')
+        self.directory = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/'
+        self.filename = self.filename.split('/')[-1]
         self.box_dimensions = np.array(self.parameters['box_dimensions'])
         self.box_overlap = np.array(self.parameters['box_overlap'])
-        self.fileset = parameters['fileset']
-        self.min_points_per_box = parameters['min_points_per_box']
-        self.max_points_per_box = parameters['max_points_per_box']
-        self.subsample = parameters['subsample']
-        self.subsampling_min_spacing = parameters['subsampling_min_spacing']
+        self.min_points_per_box = self.parameters['min_points_per_box']
+        self.max_points_per_box = self.parameters['max_points_per_box']
+        self.subsample = self.parameters['subsample']
+        self.subsampling_min_spacing = self.parameters['subsampling_min_spacing']
         self.num_procs = parameters['num_procs']
 
-        self.point_cloud = load_file(self.directory+'/original_point_clouds/'+self.parameters['input_point_cloud'],
+        self.output_dir, self.working_dir = make_folder_structure(self.directory + self.filename)
+
+        self.point_cloud = load_file(self.directory + self.filename,
                                      self.parameters['plot_centre'],
                                      self.parameters['plot_radius'])
+
+        if self.parameters['plot_radius'] != 0:
+            save_file(self.output_dir + self.filename[:-4] + '_' + str(self.parameters['plot_radius']) + '_m_crop.las',
+                      self.point_cloud)
 
         if self.parameters['low_resolution_point_cloud_hack_mode']:
             print('Using low resolution point cloud hack mode...')
@@ -40,15 +48,14 @@ class Preprocessing:
 
         self.global_shift = [np.mean(self.point_cloud[:, 0]), np.mean(self.point_cloud[:, 1]),
                              np.mean(self.point_cloud[:, 2])]
+
         self.point_cloud[:, :3] = self.point_cloud[:, :3] - self.global_shift
-        print(self.directory + "data/working_directory/" + self.parameters['input_point_cloud'][
-                                                           :-4] + '/global_shift.csv')
-        np.savetxt(self.directory + "data/working_directory/" + self.parameters['input_point_cloud'][
-                                                                :-4] + '/global_shift.csv', self.global_shift)
+
+        print('Global Shift:', self.global_shift, 'm')
+        np.savetxt(self.working_dir + 'global_shift.csv', self.global_shift)
 
     @staticmethod
-    def threaded_boxes(point_cloud, box_size, min_points_per_box, max_points_per_box, path, max_file_id,
-                       id_offset, point_divisions):
+    def threaded_boxes(point_cloud, box_size, min_points_per_box, max_points_per_box, path, id_offset, point_divisions):
 
         box_centre_mins = point_divisions - 0.5 * box_size
         box_centre_maxes = point_divisions + 0.5 * box_size
@@ -72,14 +79,12 @@ class Preprocessing:
                     box = np.asarray(box, dtype='float64')
 
                 box[:, :3] = box[:, :3]
-                np.save(path + str(max_file_id + id_offset + i).zfill(7) + '.npy', box)
+                np.save(path + str(id_offset + i).zfill(7) + '.npy', box)
             i += 1
         return 1
 
     def preprocess_point_cloud(self):
         print("Pre-processing point cloud...")
-
-        print("Making boxes...")
         point_cloud = self.point_cloud  # [self.point_cloud[:,4]!=5]
         Xmax = np.max(point_cloud[:, 0])
         Xmin = np.min(point_cloud[:, 0])
@@ -104,52 +109,34 @@ class Preprocessing:
                              int(num_boxes_z / (1 - self.box_overlap[2])) + 1)
 
         box_centres = np.vstack(np.meshgrid(x_vals, y_vals, z_vals)).reshape(3, -1).T
-
-        # This checks if there are voxelbox files already in the data directory.
-        # If there are, it gets the largest file ID number and adds one for the new start point.
-        files = glob.glob(
-            self.parameters['directory'] + "data/working_directory/" + self.parameters['input_point_cloud'][
-                                                                       :-4] + self.fileset + '*.csv')
-        max_file_id = 0
-        for file in files:
-            file_id = int(file[-9:-4])
-            if file_id > max_file_id:
-                max_file_id = file_id
-        if max_file_id != 0:
-            max_file_id += 1
-
-        path = self.parameters['directory'] + "data/working_directory/" + self.parameters['input_point_cloud'][
-                                                                          :-4] + '/' + self.fileset
-        num_procs = self.num_procs
         point_divisions = []
 
-        for thread in range(num_procs):
+        for thread in range(self.num_procs):
             point_divisions.append([])
 
         points_to_assign = box_centres
 
         while points_to_assign.shape[0] > 0:
-            for i in range(num_procs):
+            for i in range(self.num_procs):
                 point_divisions[i].append(points_to_assign[0, :])
                 points_to_assign = points_to_assign[1:]
                 if points_to_assign.shape[0] == 0:
                     break
         threads = []
         prev_id_offset = 0
-        for thread in range(num_procs):
+        for thread in range(self.num_procs):
             id_offset = 0
             for t in range(thread):
                 id_offset = id_offset + len(point_divisions[t])
-            print('Thread:', thread, prev_id_offset, id_offset, path)
+            print('Thread:', thread, prev_id_offset, id_offset)
             prev_id_offset = id_offset
-            t = threading.Thread(target=threaded_boxes, args=(self.point_cloud,
-                                                              self.box_dimensions,
-                                                              self.min_points_per_box,
-                                                              self.max_points_per_box,
-                                                              path,
-                                                              max_file_id,
-                                                              id_offset,
-                                                              point_divisions[thread],))
+            t = threading.Thread(target=Preprocessing.threaded_boxes, args=(self.point_cloud,
+                                                                            self.box_dimensions,
+                                                                            self.min_points_per_box,
+                                                                            self.max_points_per_box,
+                                                                            self.working_dir,
+                                                                            id_offset,
+                                                                            point_divisions[thread],))
             threads.append(t)
 
         for x in threads:
@@ -161,6 +148,9 @@ class Preprocessing:
         self.preprocessing_time_end = time.time()
         self.preprocessing_time_total = self.preprocessing_time_end - self.preprocessing_time_start
         print("Preprocessing took", self.preprocessing_time_total, 's')
-        np.savetxt(self.parameters['directory'] + "data/postprocessed_point_clouds/" + self.parameters['input_point_cloud'][:-4] + "_out/preprocessing_time.csv",
-                   np.array([self.preprocessing_time_total]))
-        print("Preprocessing done")
+        times = pd.DataFrame(np.array([[self.preprocessing_time_total, 0, 0, 0]]), columns=['Preprocessing_Time (s)',
+                                                                                            'Semantic_Segmentation_Time (s)',
+                                                                                            'Post_processing_time (s)',
+                                                                                            'Measurement Time (s)'])
+        times.to_csv(self.output_dir + 'run_times.csv', index=False)
+        print("Preprocessing done\n")

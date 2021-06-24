@@ -5,6 +5,27 @@ import laspy
 from sklearn.neighbors import NearestNeighbors
 from multiprocessing import Pool, get_context
 import pandas as pd
+import os
+import shutil
+
+
+def make_folder_structure(filename):
+    filename = filename.replace('\\', '/')
+    directory = os.path.dirname(os.path.realpath(filename)) + '/'
+    filename = filename.split('/')[-1][:-4]
+    output_dir = directory + filename+'_FSCT_output/'
+    working_dir = directory + filename+'_FSCT_output/working_directory/'
+
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
+
+    if not os.path.isdir(working_dir):
+        os.makedirs(working_dir)
+    else:
+        shutil.rmtree(working_dir, ignore_errors=True)
+        os.makedirs(working_dir)
+
+    return output_dir, working_dir
 
 
 def subsample_point_cloud(X, min_spacing):
@@ -34,8 +55,15 @@ def load_file(filename, plot_centre=None, plot_radius=0, silent=False):
     file_extension = filename[-4:]
     if file_extension == '.las' or file_extension == '.laz':
         inFile = laspy.read(filename)
-        pointcloud = np.vstack((inFile.x, inFile.y, inFile.z)).transpose()
+        header_names = list(inFile.point_format.dimension_names)
+        headers_of_interest = ['x','y','z','red','green','blue','classification']
+        pointcloud = np.vstack((inFile.x, inFile.y, inFile.z))
 
+        for header in headers_of_interest:
+            if header in header_names:
+                headers_of_interest.append(header)
+                pointcloud = np.vstack((pointcloud, np.asarray(getattr(inFile, header))))
+        pointcloud = pointcloud.transpose()
     elif file_extension == '.csv':
         pointcloud = np.array(pd.read_csv(filename, header=None, index_col=None, delim_whitespace=True))
 
@@ -63,10 +91,13 @@ def save_file(filename, pointcloud, headers=None, silent=False):
 
         if headers is not None:
             assert len(headers) == pointcloud.shape[1]
-
-            for header in list(headers)[3:]:
-                las.add_extra_dim(laspy.ExtraBytesParams(name=header, type="f8"))
-                setattr(las, header, np.random.normal(0, 5, size=pointcloud.shape[0]))
+            for header, i in zip(headers[3:], range(3, pointcloud.shape[1])):
+                column = pointcloud[:, i]
+                if header == 'classification':
+                    las.classification = column
+                else:
+                    las.add_extra_dim(laspy.ExtraBytesParams(name=header, type="f8"))
+                    setattr(las, header, column)
 
         las.write(filename)
         print("Saved to:", filename)
@@ -74,3 +105,7 @@ def save_file(filename, pointcloud, headers=None, silent=False):
     elif filename[-4:] == '.csv':
         pd.DataFrame(output).to_csv(filename, header=headers, index=None, sep=' ')
         print("Saved to:", filename)
+
+
+if __name__=='__main__':
+    pc = load_file('C:/Users/seank/Downloads/CULS/CULS/plot_1_annotated_FSCT_output/plot_1_annotated_5_m_crop_segmented.las')

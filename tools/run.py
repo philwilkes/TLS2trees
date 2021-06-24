@@ -3,72 +3,17 @@ from post_segmentation_script import PostProcessing
 import glob
 import numpy as np
 from measure import MeasureTree
-
+import tkinter as tk
+import tkinter.filedialog as fd
 
 if __name__ == '__main__':
+    root = tk.Tk()
+    point_clouds_to_process = fd.askopenfilenames(parent=root, title='Choose files', filetypes=[("LAS", "*.las"),
+                                                                                                ("CSV", "*.csv")])
+    point_clouds_to_process = [i.split('/')[-1] for i in point_clouds_to_process]
+    root.destroy()
 
-    point_clouds_to_process = [
-            'taper29_graphic_version.csv',
-            # 'TAPER40_class_1.0_cmDS.csv',
-            # 'Fleas_P1.csv',
-            # 's2p1NSW.csv'
-            # "TAPER49_class_1.0_cmDS.csv",
-            # "TAPER48_class_1.0_cmDS.csv",
-            # "TAPER47_class_1.0_cmDS.csv",
-            # "TAPER46_class_1.0_cmDS.csv",
-            # "TAPER45_class_1.0_cmDS.csv",
-            # "TAPER44_class_1.0_cmDS.csv",
-            # "TAPER43_class_1.0_cmDS.csv",
-            # "TAPER42_class_1.0_cmDS.csv",
-            # "TAPER41_class_1.0_cmDS.csv",
-            # "TAPER40_class_1.0_cmDS.csv",
-            # "TAPER39_class_1.0_cmDS.csv",
-            # "TAPER38_class_1.0_cmDS.csv",
-            # "TAPER37_class_1.0_cmDS.csv",
-            # "TAPER36_class_1.0_cmDS.csv",
-            # "TAPER35_class_1.0_cmDS.csv",
-            # "TAPER34_class_1.0_cmDS.csv",
-            # "TAPER33_class_1.0_cmDS.csv",
-            # "TAPER32_class_1.0_cmDS.csv",
-            # "TAPER31_class_1.0_cmDS.csv",
-            # "TAPER30_class_1.0_cmDS.csv",
-            # "TAPER29_class_1.0_cmDS.csv",
-            # "TAPER50_class_1.0_cmDS.csv",
-            # "T27_class_1.0_cmDS.csv",
-            # "T26_class_1.0_cmDS.csv",
-            # "T25_class_1.0_cmDS.csv",
-            # "T23_class_1.0_cmDS.csv",
-            # "T22_class_1.0_cmDS.csv",
-            # "T21_class_1.0_cmDS.csv",
-            # "T20_class_1.0_cmDS.csv",
-            # "T19_class_1.0_cmDS.csv",
-            # "T18_class_1.0_cmDS.csv",
-            # "T017_class_1.0_cmDS.csv",
-            # "T16_class_1.0_cmDS.csv",
-            # "T15_class_1.0_cmDS.csv",
-            # "T14_class_1.0_cmDS.csv",
-            # "T13_class_1.0_cmDS.csv",
-            # "T12_class_1.0_cmDS.csv",
-            # "T11_class_1.0_cmDS.csv",
-            # "T10_class_1.0_cmDS.csv",
-            # "T9_class_1.0_cmDS.csv",
-            # "T8_class_1.0_cmDS.csv",
-            # "T7_class_1.0_cmDS.csv",
-            # "T6_class_1.0_cmDS.csv",
-            # "T05_class_1.0_cmDS.csv",
-            # "T4_class_1.0_cmDS.csv",
-            # "T3_class_1.0_cmDS.csv",
-            # "T02_class_1.0_cmDS.csv",
-            # "T1_class_1.0_cmDS.csv",
-
-            # 'Fleas_P2.csv',
-            # 'Fleas_P3.csv',
-            # 'Leach_P61.csv',
-            # 'Leach_P111.csv',
-            # 'Denham_P264.csv',
-            # 'Denham_P257.csv',
-    ]
-
+    print(point_clouds_to_process)
     for point_cloud in point_clouds_to_process:
         print(point_cloud)
 
@@ -80,7 +25,7 @@ if __name__ == '__main__':
                           box_dimensions=[6, 6, 6],
                           box_overlap=[0.5, 0.5, 0.5],
                           min_points_per_box=1000,
-                          max_points_per_box=20000,
+                          max_points_per_box=30000,
                           subsample=False,
                           subsampling_min_spacing=0.01,
                           num_procs=20,
@@ -95,9 +40,9 @@ if __name__ == '__main__':
 
                           max_diameter=5,
                           num_neighbours=3,
-                          slice_thickness=0.15,
-                          slice_increment=0.2,  #0.05
-                          slice_clustering_distance=0.1,
+                          slice_thickness=0.2,#default = 0.2
+                          slice_increment=0.05,#default = 0.05
+                          slice_clustering_distance=0.2, #default = 0.1
                           cleaned_measurement_radius=0.18,
                           minimum_CCI=0.3,
                           min_tree_volume=0.005,
@@ -105,17 +50,20 @@ if __name__ == '__main__':
                           ground_veg_cutoff_height=3,
 
 
-                          canopy_mode='continuous',
+                          canopy_mode='photogrammetry_mode',
                           Site='not_specified',
                           PlotID='not_specified',
+                          plot_centre=None,
+                          plot_radius=0,
                           UTM_zone_number=50,
                           UTM_zone_letter=None,
                           UTM_is_north=False,
                           run_from_start=1,
-                          filter_noise=0)
+                          filter_noise=0,
+                          low_resolution_point_cloud_hack_mode=0)
 
-        # sem_seg = SemanticSegmentation(parameters)
-        # sem_seg.run_preprocessing()
+        sem_seg = SemanticSegmentation(parameters)
+        sem_seg.run_preprocessing()
         # sem_seg.inference()
         #
         # object_1 = PostProcessing(parameters)
@@ -125,5 +73,4 @@ if __name__ == '__main__':
 
         measure1 = MeasureTree(parameters)
         measure1.run_measurement_extraction()
-
-        del object_1, measure1
+        del measure1

@@ -21,3 +21,15 @@ Krisanski, S.; Taskhiri, M.S.; Gonzalez Aracil, S.; Herries, D.; Turner, P. Sens
 Krisanski, S.; Taskhiri, M.S.; Gonzalez Aracil, S.; Herries, D.; Turner, P. Forest Structural Complexity Tool - An Open Source, Fully-Automated Tool for Measuring Forest Point Clouds. Remote Sens. 2021, XX, XXXX. https://doi.org/XX.XXXX/rsXXXXXXXX
 
 
+##How to use
+
+
+###Low resolution hack mode...
+This model was trained on relatively high resolution point clouds, so if a stem is of sufficiently low resolution,
+it will likely be classified as vegetation instead. Eventually, I will train this model on a larger training dataset
+with more examples of sparse point clouds, however, in the meantime, I came up with an abomination of a hack that works
+reasonably well.
+
+Low resolution hack mode will copy the input point cloud, jitter the points in random directions by 1 cm, then join this
+copied point cloud to the original point cloud. This gives the model more points to work with, which it tends to be happier about...
+Once inference is complete, the original point cloud is returned.

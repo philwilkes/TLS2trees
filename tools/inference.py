@@ -11,6 +11,7 @@ from sklearn.neighbors import NearestNeighbors
 from scipy import spatial
 import os
 import time
+from file_handling import load_file, save_file
 
 
 class TestingDataset(Dataset, ABC):
@@ -47,25 +48,7 @@ def assign_labels_to_original_point_cloud(original, labeled, label_index):
     return original
 
 
-def subsample_point_cloud(X, min_spacing):
-    print("Subsampling...")
-    neighbours = NearestNeighbors(n_neighbors=2, algorithm='kd_tree', metric='euclidean').fit(X[:, :3])
-    distances, indices = neighbours.kneighbors(X[:, :3])
-    X_keep = X[distances[:, 1] >= min_spacing]
-    i1 = [distances[:, 1] < min_spacing][0]
-    i2 = [X[indices[:, 0], 2] < X[indices[:, 1], 2]][0]
-    X_check = X[np.logical_and(i1, i2)]
 
-    while np.shape(X_check)[0] > 1:
-        neighbours = NearestNeighbors(n_neighbors=2, algorithm='kd_tree', metric='euclidean').fit(X_check[:, :3])
-        distances, indices = neighbours.kneighbors(X_check[:, :3])
-        X_keep = np.vstack((X_keep, X_check[distances[:, 1] >= min_spacing, :]))
-        i1 = [distances[:, 1] < min_spacing][0]
-        i2 = [X_check[indices[:, 0], 2] < X_check[indices[:, 1], 2]][0]
-        X_check = X_check[np.logical_and(i1, i2)]
-    # X = np.delete(X,np.unique(indices[distances[:,1]<min_spacing]),axis=0)
-    X = X_keep
-    return X
 
 
 def choose_most_confident_label(point_cloud, original_point_cloud):
@@ -151,8 +134,8 @@ class SemanticSegmentation:
                 break
             self.output_point_cloud = np.zeros((0, 3 + outshape + 4))
 
-            for i, data in enumerate(test_loader):  # , 0): testing without this
-                print(i * self.parameters['batch_size'], '/', num_boxes)
+            for i, data in enumerate(test_loader):
+                print('\r' + str(i * self.parameters['batch_size']) + '/' + str(num_boxes))
                 data = data.to(self.device)
                 out = model(data)
                 out = out.permute(2, 1, 0).squeeze()
@@ -165,7 +148,7 @@ class SemanticSegmentation:
                     outputb = np.asarray(output[data.batch.cpu() == batch])
                     outputb[:, :3] = outputb[:, :3] + np.asarray(data.local_shift.cpu())[3 * batch:3 + (3 * batch)]
                     self.output_point_cloud = np.vstack((self.output_point_cloud, outputb))
-
+            print('\r' + str(num_boxes)+'/'+str(num_boxes))
         del outputb, out, batches, pos, extra_info_out, output  # clean up anything no longer needed to free RAM.
 
         print("Loading original point cloud...")
@@ -174,22 +157,21 @@ class SemanticSegmentation:
                 header=None, index_col=None, delim_whitespace=True))
         original_point_cloud = original_point_cloud[:, :3]
         original_point_cloud[:, :3] = original_point_cloud[:, :3] - global_shift
+
         if self.parameters['subsample']:
-            original_point_cloud = subsample_point_cloud(original_point_cloud, self.parameters['subsampling_min_spacing'])
+            original_point_cloud = subsample_point_cloud(original_point_cloud,
+                                                         self.parameters['subsampling_min_spacing'])
 
         self.output = np.asarray(choose_most_confident_label(self.output_point_cloud, original_point_cloud), dtype='float64')
         self.output[:, :3] = self.output[:, :3] + global_shift
         print("Saving...")
-        pd.DataFrame(self.output).to_csv(
-                self.parameters['directory'] + "data/segmented_point_clouds/" + self.parameters['input_point_cloud'][
-                                                                                :-4] + '_out' + '.csv', header=None,
-                index=None, sep=' ')
+        save_file(self.parameters['directory'] + "data/segmented_point_clouds/" + self.parameters['input_point_cloud'][:-4] + '_out' + '.las',
+                  self.output)
+
         print("Saved")
         self.sem_seg_end_time = time.time()
         self.sem_seg_total_time = self.sem_seg_end_time - self.sem_seg_start_time
-        np.savetxt(
-            self.parameters['directory'] + "data/postprocessed_point_clouds/" + self.parameters['input_point_cloud'][
-                                                                                :-4] + '_out/' + "semantic_segmentation_time.csv",
-            np.array([self.sem_seg_total_time]))
+        np.savetxt(self.parameters['directory'] + "data/postprocessed_point_clouds/" + self.parameters['input_point_cloud'][:-4] + '_out/' + "semantic_segmentation_time.csv",
+                   np.array([self.sem_seg_total_time]))
         print("Semantic segmentation took", self.sem_seg_total_time, 's')
         print("Semantic segmentation done")

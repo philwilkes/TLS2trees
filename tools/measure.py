@@ -38,9 +38,7 @@ class MeasureTree:
         self.vegetation_points = self.vegetation_points[:, :3]
         self.vegetation_points = np.hstack((self.vegetation_points, np.zeros((self.vegetation_points.shape[0], 2))))
         self.ground_veg = np.zeros((0, self.vegetation_points.shape[1]))
-        self.terrain_points = np.array(pd.read_csv(
-            self.directory + 'data/postprocessed_point_clouds/' + self.input_point_cloud + '/terrain_points.csv',
-            header=None, index_col=None, delim_whitespace=True))
+        self.terrain_points = np.array(pd.read_csv(self.directory + 'data/postprocessed_point_clouds/' + self.input_point_cloud + '/terrain_points.csv', header=None, index_col=None, delim_whitespace=True))
         self.DTM = np.loadtxt("../data/postprocessed_point_clouds/" + self.input_point_cloud + "/DTM.csv")
         if self.parameters['filter_noise']:
             self.stem_points = self.noise_filtering(self.stem_points, min_neighbour_dist=0.03, min_neighbours=3)
@@ -272,7 +270,7 @@ class MeasureTree:
 
         elif P_xy.shape[0] >= 10 and P_xy.shape[0] < 20:
             model_robust, inliers = ransac(P_xy[:, :2], CircleModel, min_samples=7,
-                                           residual_threshold=0.3, max_trials=10000)
+                                           residual_threshold=0.4, max_trials=10000)
             xc, yc = model_robust.params[0:2]
             r = model_robust.params[2]
             CCI = MeasureTree.circumferential_completeness_index([xc, yc], r, P_xy[:, :2])
@@ -767,9 +765,9 @@ class MeasureTree:
                 highneighbours = sorted_full_cyl_array[
                     tree_kdtree.query_ball_point(highest_point[:3], r=max_search_radius)]
 
-                lowest_point_z = lowest_point[2] - griddata((self.DTM[:, 0], self.DTM[:, 1]), self.DTM[:, 2],
-                                                            lowest_point[0:2], method='linear',
-                                                            fill_value=np.median(self.DTM[:, 2]))
+                # lowest_point_z = lowest_point[2] - griddata((self.DTM[:, 0], self.DTM[:, 1]), self.DTM[:, 2],
+                #                                             lowest_point[0:2], method='linear',
+                #                                             fill_value=np.median(self.DTM[:, 2]))
                 if lowneighbours.shape[0] > 1:
                     # vector_angles = MeasureTree.compute_angle(lowest_point[3:6],lowneighbours[lowneighbours[:,2]<lowest_point[2],3:6])
                     # angles = MeasureTree.compute_angle(lowest_point[3:6],lowneighbours[lowneighbours[:,2]<lowest_point[2],3:6])
@@ -790,15 +788,11 @@ class MeasureTree:
                             tree[:, self.cyl_dict['tree_id']] = best_parent_point[self.cyl_dict['tree_id']]
                             sorted_full_cyl_array = np.vstack((sorted_full_cyl_array, tree))
 
-                        elif lowest_point_z < 3:
+                        # elif lowest_point_z < 3:
+                        else:
                             tree[:, self.cyl_dict['tree_id']] = t_id
                             sorted_full_cyl_array = np.vstack((sorted_full_cyl_array, tree))
                             t_id += 1
-
-                elif lowest_point_z < 3:
-                    tree[:, self.cyl_dict['tree_id']] = t_id
-                    sorted_full_cyl_array = np.vstack((sorted_full_cyl_array, tree))
-                    t_id += 1
 
                 elif highneighbours.shape[0] > 1:
                     # highneighbours = highneighbours[highneighbours[:,2]>highest_point[2]]
@@ -815,6 +809,12 @@ class MeasureTree:
                                                                          resolution=self.slice_increment)))
                             tree[:, self.cyl_dict['tree_id']] = best_parent_point[self.cyl_dict['tree_id']]
                             sorted_full_cyl_array = np.vstack((sorted_full_cyl_array, tree))
+
+                # elif lowest_point_z < 3:
+                else:
+                    tree[:, self.cyl_dict['tree_id']] = t_id
+                    sorted_full_cyl_array = np.vstack((sorted_full_cyl_array, tree))
+                    t_id += 1
 
         pd.DataFrame(sorted_full_cyl_array).to_csv(
                 self.directory + 'data/postprocessed_point_clouds/' + self.input_point_cloud + '/sorted_full_cyl_array.csv',
@@ -866,8 +866,7 @@ class MeasureTree:
                                                                          resolution=self.slice_increment)
                                 # print(point-interp_to_point)
                                 current_branch = np.vstack((current_branch, interpolated_cyls))
-                                interpolated_full_cyl_array = np.vstack(
-                                        (interpolated_full_cyl_array, interpolated_cyls))
+                                interpolated_full_cyl_array = np.vstack((interpolated_full_cyl_array, interpolated_cyls))
 
                 if parent_branch.shape[0] > 0:
                     parent_centre = np.mean(parent_branch[:, :3])
@@ -886,11 +885,14 @@ class MeasureTree:
                         if angles.shape[0] > 0:
                             best_parent_point = parent_points_in_range[np.argmin(angles)]
                             # Interpolates from lowest point of current branch to smallest angle parent point.
-                            interpolated_full_cyl_array = np.vstack((interpolated_full_cyl_array, self.interpolate_cyl(
-                                    lowest_point_of_current_branch, best_parent_point,
-                                    resolution=self.slice_increment)))
+                            interpolated_full_cyl_array = np.vstack((interpolated_full_cyl_array, self.interpolate_cyl(lowest_point_of_current_branch, best_parent_point, resolution=self.slice_increment)))
 
-            interpolated_full_cyl_array = np.vstack((interpolated_full_cyl_array, sorted_full_cyl_array))
+            lowest_measured_tree_point = deepcopy(current_tree[np.argmin(current_tree[:, -1])])
+            tree_base_point = deepcopy(current_tree[np.argmin(current_tree[:, -1])])
+            interpolated_to_ground = self.interpolate_cyl(lowest_measured_tree_point, tree_base_point,
+                                                          resolution=self.slice_increment)
+            interpolated_full_cyl_array = np.vstack((interpolated_full_cyl_array, interpolated_to_ground))
+
         pd.DataFrame(interpolated_full_cyl_array).to_csv(
                 self.directory + 'data/postprocessed_point_clouds/' + self.input_point_cloud + '/interpolated_full_cyl_array.csv',
                 header=False, index=None, sep=' ')
@@ -906,8 +908,8 @@ class MeasureTree:
                 self.directory + 'data/postprocessed_point_clouds/' + self.input_point_cloud + '/interpolated_full_cyl_array.csv',
                 header=False, index=None, sep=' ')
 
-        interpolated_full_cyl_array = np.loadtxt(
-                self.directory + 'data/postprocessed_point_clouds/' + self.input_point_cloud + '/interpolated_full_cyl_array.csv')
+        # interpolated_full_cyl_array = np.loadtxt(
+        #         self.directory + 'data/postprocessed_point_clouds/' + self.input_point_cloud + '/interpolated_full_cyl_array.csv')
 
         # Need a step to remove overlapping interpolations and to remove cylinders inside other cylinders.
         print("Cylinder Cleaning...")
@@ -920,15 +922,7 @@ class MeasureTree:
             if tree_id % 10 == 0:
                 print('\r', tree_id, '/', max_tree_id, end='')
             i += 1
-            single_tree = interpolated_full_cyl_array[
-                interpolated_full_cyl_array[:, self.cyl_dict['tree_id']] == tree_id]
-            lowest_measured_tree_point = deepcopy(single_tree[np.argmin(single_tree[:, -1])])
-            tree_base_point = deepcopy(single_tree[np.argmin(single_tree[:, -1])])
-            z_tree_base = tree_base_point[2] - tree_base_point[-1]
-            tree_base_point[2] = z_tree_base
-            single_tree = np.vstack((single_tree, self.interpolate_cyl(lowest_measured_tree_point, tree_base_point,
-                                                                       resolution=self.slice_increment)))
-
+            single_tree = interpolated_full_cyl_array[interpolated_full_cyl_array[:, self.cyl_dict['tree_id']] == tree_id]
             input_data.append([single_tree, self.parameters['cleaned_measurement_radius'], self.cyl_dict])
 
         print('\r', max_tree_id, '/', max_tree_id, end='')
@@ -1249,8 +1243,8 @@ class MeasureTree:
             sorted_tree_points = np.vstack((sorted_tree_points, tree_points))
             base_northing = tree[np.argmin(tree[:, 2]), 0]
             base_easting = tree[np.argmin(tree[:, 2]), 1]
-            DBH_slice = tree[np.logical_and(tree[:, self.cyl_dict['height_above_dtm']] > 0.1,
-                                            tree[:, self.cyl_dict['height_above_dtm']] < 1.6)]
+            DBH_slice = tree[np.logical_and(tree[:, self.cyl_dict['height_above_dtm']] >= 1.0,
+                                            tree[:, self.cyl_dict['height_above_dtm']] <= 1.6)]
             DBH = 0
             DBH_X = 0
             DBH_Y = 0
@@ -1301,39 +1295,33 @@ class MeasureTree:
                 this_trees_data[:, tree_data_dict['Crown_top_x']] = tree_max_point[0]
                 this_trees_data[:, tree_data_dict['Crown_top_y']] = tree_max_point[1]
                 this_trees_data[:, tree_data_dict['Crown_top_z']] = tree_max_point[2]
-                this_trees_data[:,
-                tree_data_dict['mean_understory_height_in_10m_radius']] = mean_understory_height_in_10m_radius
+                this_trees_data[:, tree_data_dict['mean_understory_height_in_10m_radius']] = mean_understory_height_in_10m_radius
                 tree_data = np.vstack((tree_data, this_trees_data))
 
             text_size = 0.00256
             line_height = 0.025
             if DBH_Z != 0:
-                line0 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y + line_height, DBH_Z + line_height,
-                                                     DBH * 0.5, '            DIAM: ' + str(np.around(DBH, 2)) + 'm')
+                line0 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y + line_height, DBH_Z + line_height, DBH * 0.5,
+                                                     '            DIAM: ' + str(np.around(DBH, 2)) + 'm')
                 line1 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y, DBH_Z, DBH * 0.5,
                                                      '       CCI AT BH: ' + str(np.around(mean_CCI_at_BH, 2)))
-                line2 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 2 * line_height, DBH_Z - 2 * line_height,
-                                                     DBH * 0.5,
+                line2 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 2 * line_height, DBH_Z - 2 * line_height, DBH * 0.5,
                                                      '          HEIGHT: ' + str(np.around(tree_height, 2)) + 'm')
-                line3 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height, DBH_Z - 3 * line_height,
-                                                     DBH * 0.5, '          VOLUME: ' + str(np.around(volume, 2)) + 'm')
-                line4 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height, DBH_Z - 4 * line_height,
-                                                     DBH * 0.5, '    CHECK VOLUME: ' + str(
-                        np.around((np.pi * (0.5 * DBH) ** 2) * tree_height, 2)) + 'm')
-                height_measurement_line = self.points_along_line(x_tree_base, y_tree_base, z_tree_base, x_tree_base,
-                                                                 y_tree_base, z_tree_base + tree_height,
-                                                                 resolution=0.025)
+                line3 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height, DBH_Z - 3 * line_height, DBH * 0.5,
+                                                     '          VOLUME: ' + str(np.around(volume, 2)) + 'm')
+                line4 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height, DBH_Z - 4 * line_height, DBH * 0.5,
+                                                     '    CHECK VOLUME: ' + str(np.around((np.pi * (0.5 * DBH) ** 2) * tree_height, 2)) + 'm')
+
+                height_measurement_line = self.points_along_line(x_tree_base, y_tree_base, z_tree_base, y_tree_base,
+                                                                 x_tree_base, z_tree_base + tree_height, resolution=0.025)
+
                 dbh_circle_points = self.create_3d_circles_as_points_flat(DBH_X, DBH_Y, DBH_Z, DBH / 2,
                                                                           circle_points=100)
                 self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3, line4,
                                                    height_measurement_line, dbh_circle_points))
 
-        pd.DataFrame(self.text_point_cloud).to_csv(
-                self.directory + 'data/postprocessed_point_clouds/' + self.input_point_cloud + '/text_point_cloud.csv',
-                header=False, index=None, sep=' ')
-        pd.DataFrame(sorted_tree_points).to_csv(
-                self.directory + 'data/postprocessed_point_clouds/' + self.input_point_cloud + '/sorted_tree_points.csv',
-                header=False, index=None, sep=' ')
+        pd.DataFrame(self.text_point_cloud).to_csv(self.directory + 'data/postprocessed_point_clouds/' + self.input_point_cloud + '/text_point_cloud.csv', header=False, index=None, sep=' ')
+        pd.DataFrame(sorted_tree_points).to_csv(self.directory + 'data/postprocessed_point_clouds/' + self.input_point_cloud + '/sorted_tree_points.csv', header=False, index=None, sep=' ')
         pd.DataFrame(tree_data).to_csv(
                 self.directory + 'data/postprocessed_point_clouds/' + self.input_point_cloud + '/tree_data.csv',
                 header=[i for i in tree_data_dict], index=None, sep=',')
@@ -1341,91 +1329,91 @@ class MeasureTree:
                 self.directory + 'data/postprocessed_point_clouds/' + self.input_point_cloud + "/Plot_Extents.kml")
 
 
-if __name__ == '__main__':
-    plt.ioff()
-    filenames = [
-            # 'NDT_PROJ_Leach_P111_TLS.csv',
-            # 'NDT_PROJ_Leach_P61_TLS.csv',
-            'NDT_PROJ_Denham_P264_TLS.csv',
-            'NDT_PROJ_Denham_P257_TLS.csv',
-            # 'taper29_graphic_version.csv',
-            # 'measure_combined_test.csv',
-            # 's2p1NSW.csv',
-            # 'Fleas P1_med.csv',
-            # 'Fleas_P1.csv',
-            # 'Fleas_P2.csv',
-            # 'Fleas_P3.csv',
-            # 'Leach_P61.csv',
-            # 'Leach_P111.csv',
-            # 'Denham_P264.csv',
-            # 'Denham_P257.csv',
-            "TAPER49_class_1.0_cmDS.csv",
-            "TAPER48_class_1.0_cmDS.csv",
-            "TAPER46_class_1.0_cmDS.csv",
-            "TAPER47_class_1.0_cmDS.csv",
-            "TAPER45_class_1.0_cmDS.csv",
-            "TAPER44_class_1.0_cmDS.csv",
-            "TAPER43_class_1.0_cmDS.csv",
-            "TAPER42_class_1.0_cmDS.csv",
-            "TAPER41_class_1.0_cmDS.csv",
-            "TAPER40_class_1.0_cmDS.csv",
-            "TAPER39_class_1.0_cmDS.csv",
-            "TAPER38_class_1.0_cmDS.csv",
-            "TAPER37_class_1.0_cmDS.csv",
-            "TAPER36_class_1.0_cmDS.csv",
-            "TAPER35_class_1.0_cmDS.csv",
-            "TAPER34_class_1.0_cmDS.csv",
-            "TAPER33_class_1.0_cmDS.csv",
-            "TAPER32_class_1.0_cmDS.csv",
-            "TAPER31_class_1.0_cmDS.csv",
-            "TAPER30_class_1.0_cmDS.csv",
-            "TAPER29_class_1.0_cmDS.csv",
-            "TAPER50_class_1.0_cmDS.csv",
-            "T27_class_1.0_cmDS.csv",
-            "T26_class_1.0_cmDS.csv",
-            "T25_class_1.0_cmDS.csv",
-            "T23_class_1.0_cmDS.csv",
-            "T22_class_1.0_cmDS.csv",
-            "T21_class_1.0_cmDS.csv",
-            "T20_class_1.0_cmDS.csv",
-            "T19_class_1.0_cmDS.csv",
-            "T18_class_1.0_cmDS.csv",
-            "T017_class_1.0_cmDS.csv",
-            "T16_class_1.0_cmDS.csv",
-            "T15_class_1.0_cmDS.csv",
-            "T14_class_1.0_cmDS.csv",
-            "T13_class_1.0_cmDS.csv",
-            "T12_class_1.0_cmDS.csv",
-            "T11_class_1.0_cmDS.csv",
-            "T10_class_1.0_cmDS.csv",
-            "T9_class_1.0_cmDS.csv",
-            "T8_class_1.0_cmDS.csv",
-            "T7_class_1.0_cmDS.csv",
-            "T6_class_1.0_cmDS.csv",
-            "T05_class_1.0_cmDS.csv",
-            "T4_class_1.0_cmDS.csv",
-            "T3_class_1.0_cmDS.csv",
-            "T02_class_1.0_cmDS.csv",
-            "T1_class_1.0_cmDS.csv",
-
-    ]
-
-    for file in filenames:
-        print(file)
-        # try:
-        parameters = dict(directory='../', fileset='test', input_point_cloud=None, model_filename='../model/model.pth',
-                          batch_size=20, box_dimensions=[6, 6, 6], box_overlap=[0.5, 0.5, 0.5], min_points_per_box=1000,
-                          max_points_per_box=20000, subsample=False, subsampling_min_spacing=0.01, num_procs=20,
-                          noise_class=0, terrain_class=1, vegetation_class=2, cwd_class=3, stem_class=4,
-                          coarse_grid_resolution=6, fine_grid_resolution=0.5, max_diameter=5, num_neighbours=3,
-                          slice_thickness=0.15, slice_increment=0.05, slice_clustering_distance=0.1,
-                          cleaned_measurement_radius=0.18, minimum_CCI=0.3, min_tree_volume=0.005,
-                          Canopy_coverage_resolution=0.5, ground_veg_cutoff_height=3, canopy_mode='continuous',
-                          Site='not_specified', PlotID='not_specified', UTM_zone_number=50, UTM_zone_letter=None,
-                          filter_noise=0, UTM_is_north=False, run_from_start=0)
-
-        parameters['input_point_cloud'] = file
-        measure1 = MeasureTree(parameters)
-        measure1.run_measurement_extraction()
-        # except:
-        #     print('exception',file)
+# if __name__ == '__main__':
+#     plt.ioff()
+#     filenames = [
+#             # 'NDT_PROJ_Leach_P111_TLS.csv',
+#             # 'NDT_PROJ_Leach_P61_TLS.csv',
+#             'NDT_PROJ_Denham_P264_TLS.csv',
+#             'NDT_PROJ_Denham_P257_TLS.csv',
+#             # 'taper29_graphic_version.csv',
+#             # 'measure_combined_test.csv',
+#             # 's2p1NSW.csv',
+#             # 'Fleas P1_med.csv',
+#             # 'Fleas_P1.csv',
+#             # 'Fleas_P2.csv',
+#             # 'Fleas_P3.csv',
+#             # 'Leach_P61.csv',
+#             # 'Leach_P111.csv',
+#             # 'Denham_P264.csv',
+#             # 'Denham_P257.csv',
+#             "TAPER49_class_1.0_cmDS.csv",
+#             "TAPER48_class_1.0_cmDS.csv",
+#             "TAPER46_class_1.0_cmDS.csv",
+#             "TAPER47_class_1.0_cmDS.csv",
+#             "TAPER45_class_1.0_cmDS.csv",
+#             "TAPER44_class_1.0_cmDS.csv",
+#             "TAPER43_class_1.0_cmDS.csv",
+#             "TAPER42_class_1.0_cmDS.csv",
+#             "TAPER41_class_1.0_cmDS.csv",
+#             "TAPER40_class_1.0_cmDS.csv",
+#             "TAPER39_class_1.0_cmDS.csv",
+#             "TAPER38_class_1.0_cmDS.csv",
+#             "TAPER37_class_1.0_cmDS.csv",
+#             "TAPER36_class_1.0_cmDS.csv",
+#             "TAPER35_class_1.0_cmDS.csv",
+#             "TAPER34_class_1.0_cmDS.csv",
+#             "TAPER33_class_1.0_cmDS.csv",
+#             "TAPER32_class_1.0_cmDS.csv",
+#             "TAPER31_class_1.0_cmDS.csv",
+#             "TAPER30_class_1.0_cmDS.csv",
+#             "TAPER29_class_1.0_cmDS.csv",
+#             "TAPER50_class_1.0_cmDS.csv",
+#             "T27_class_1.0_cmDS.csv",
+#             "T26_class_1.0_cmDS.csv",
+#             "T25_class_1.0_cmDS.csv",
+#             "T23_class_1.0_cmDS.csv",
+#             "T22_class_1.0_cmDS.csv",
+#             "T21_class_1.0_cmDS.csv",
+#             "T20_class_1.0_cmDS.csv",
+#             "T19_class_1.0_cmDS.csv",
+#             "T18_class_1.0_cmDS.csv",
+#             "T017_class_1.0_cmDS.csv",
+#             "T16_class_1.0_cmDS.csv",
+#             "T15_class_1.0_cmDS.csv",
+#             "T14_class_1.0_cmDS.csv",
+#             "T13_class_1.0_cmDS.csv",
+#             "T12_class_1.0_cmDS.csv",
+#             "T11_class_1.0_cmDS.csv",
+#             "T10_class_1.0_cmDS.csv",
+#             "T9_class_1.0_cmDS.csv",
+#             "T8_class_1.0_cmDS.csv",
+#             "T7_class_1.0_cmDS.csv",
+#             "T6_class_1.0_cmDS.csv",
+#             "T05_class_1.0_cmDS.csv",
+#             "T4_class_1.0_cmDS.csv",
+#             "T3_class_1.0_cmDS.csv",
+#             "T02_class_1.0_cmDS.csv",
+#             "T1_class_1.0_cmDS.csv",
+#
+#     ]
+#
+#     for file in filenames:
+#         print(file)
+#         # try:
+#         parameters = dict(directory='../', fileset='test', input_point_cloud=None, model_filename='../model/model.pth',
+#                           batch_size=20, box_dimensions=[6, 6, 6], box_overlap=[0.5, 0.5, 0.5], min_points_per_box=1000,
+#                           max_points_per_box=20000, subsample=False, subsampling_min_spacing=0.01, num_procs=20,
+#                           noise_class=0, terrain_class=1, vegetation_class=2, cwd_class=3, stem_class=4,
+#                           coarse_grid_resolution=6, fine_grid_resolution=0.5, max_diameter=5, num_neighbours=3,
+#                           slice_thickness=0.15, slice_increment=0.05, slice_clustering_distance=0.1,
+#                           cleaned_measurement_radius=0.18, minimum_CCI=0.3, min_tree_volume=0.005,
+#                           Canopy_coverage_resolution=0.5, ground_veg_cutoff_height=3, canopy_mode='continuous',
+#                           Site='not_specified', PlotID='not_specified', UTM_zone_number=50, UTM_zone_letter=None,
+#                           filter_noise=0, UTM_is_north=False, run_from_start=1)
+#
+#         parameters['input_point_cloud'] = file
+#         measure1 = MeasureTree(parameters)
+#         measure1.run_measurement_extraction()
+#         # except:
+#         #     print('exception',file)

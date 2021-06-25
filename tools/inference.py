@@ -105,7 +105,7 @@ class SemanticSegmentation:
             print('\r' + str(num_boxes)+'/'+str(num_boxes))
         del outputb, out, batches, pos, output  # clean up anything no longer needed to free RAM.
         print(self.directory + self.filename)
-        original_point_cloud = load_file(self.directory + self.filename)
+        original_point_cloud, headers = load_file(self.directory + self.filename)
         original_point_cloud = original_point_cloud[:, :3]
         original_point_cloud[:, :3] = original_point_cloud[:, :3] - global_shift
 

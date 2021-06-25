@@ -15,7 +15,7 @@ from skimage.measure import LineModelND, CircleModel, ransac
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import NearestNeighbors
 from tools import load_file, save_file
-sys.setrecursionlimit(10 ** 6)  # TODO test if necessary...
+sys.setrecursionlimit(10 ** 6)  #TODO test if necessary...
 
 
 class MeasureTree:

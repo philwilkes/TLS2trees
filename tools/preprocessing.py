@@ -30,13 +30,15 @@ class Preprocessing:
 
         self.output_dir, self.working_dir = make_folder_structure(self.directory + self.filename)
 
-        self.point_cloud = load_file(self.directory + self.filename,
-                                     self.parameters['plot_centre'],
-                                     self.parameters['plot_radius'])
+        self.point_cloud, headers = load_file(self.directory + self.filename,
+                                              self.parameters['plot_centre'],
+                                              self.parameters['plot_radius'])
 
         if self.parameters['plot_radius'] != 0:
             save_file(self.output_dir + self.filename[:-4] + '_' + str(self.parameters['plot_radius']) + '_m_crop.las',
                       self.point_cloud)
+
+        self.point_cloud = self.point_cloud[:, :3]  # Trims off unneeded dimensions if present.
 
         if self.parameters['low_resolution_point_cloud_hack_mode']:
             print('Using low resolution point cloud hack mode...')

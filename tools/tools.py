@@ -8,6 +8,7 @@ import pandas as pd
 import os
 import shutil
 from sklearn.cluster import DBSCAN
+from scipy.interpolate import griddata
 
 
 def make_folder_structure(filename):
@@ -59,7 +60,7 @@ def subsample_point_cloud(X, min_spacing):
     return X
 
 
-def load_file(filename, plot_centre=None, plot_radius=0, silent=False):
+def load_file(filename, plot_centre=None, plot_radius=0, silent=False, headers_of_interest = []):
     if not silent:
         print('Loading file...', filename)
     file_extension = filename[-4:]
@@ -68,14 +69,17 @@ def load_file(filename, plot_centre=None, plot_radius=0, silent=False):
     if file_extension == '.las' or file_extension == '.laz':
         inFile = laspy.read(filename)
         header_names = list(inFile.point_format.dimension_names)
-        headers_of_interest = ['X', 'Y', 'Z', 'red', 'green', 'blue', 'classification']
-        pointcloud = np.zeros((0, np.shape(inFile.x)[0]))
-        for header in headers_of_interest:
-            if header in header_names:
-                print(header)
-                pointcloud = np.vstack((pointcloud, np.asarray(getattr(inFile, header))))
-                output_headers.append(header)
+        print(header_names)
+        coord_headers = ['X', 'Y', 'Z']
+        pointcloud = np.vstack((inFile.x, inFile.y, inFile.z))
+        if len(headers_of_interest) != 0:
+            for header in headers_of_interest:
+                if header in header_names:
+                    print(header)
+                    pointcloud = np.vstack((pointcloud, getattr(inFile, header)))
+                    output_headers.append(header)
         pointcloud = pointcloud.transpose()
+
     elif file_extension == '.csv':
         pointcloud = np.array(pd.read_csv(filename, header=None, index_col=None, delim_whitespace=True))
 
@@ -85,39 +89,42 @@ def load_file(filename, plot_centre=None, plot_radius=0, silent=False):
         distances = np.linalg.norm(pointcloud[:, :2] - plot_centre, axis=1)
         keep_points = distances < plot_radius
         pointcloud = pointcloud[keep_points]
+    return pointcloud, coord_headers + output_headers
 
-    return pointcloud, output_headers
 
+def save_file(filename, pointcloud, headers=[], silent=False):
+    if pointcloud.shape[0] == 0:
+        print(filename,'is empty...')
+    else:
+        if not silent:
+            print('Saving file...')
+        if filename[-4:] == '.las':
+            las = laspy.create(file_version="1.4", point_format=6)
+            las.header.offsets = np.min(pointcloud[:, :3], axis=0)
+            las.header.scales = [0.0001, 0.0001, 0.0001]
 
-def save_file(filename, pointcloud, headers=None, silent=False):
-    if not silent:
-        print('Saving file...')
-    if filename[-4:] == '.las':
-        las = laspy.create(file_version="1.4", point_format=0)
+            las.x = pointcloud[:, 0]
+            las.y = pointcloud[:, 1]
+            las.z = pointcloud[:, 2]
 
-        las.header.offsets = np.min(pointcloud, axis=0)
-        las.header.scales = [0.0001, 0.0001, 0.0001]
-
-        las.x = pointcloud[:, 0]
-        las.y = pointcloud[:, 1]
-        las.z = pointcloud[:, 2]
-
-        if headers is not None:
-            assert len(headers) == pointcloud.shape[1]
-            for header, i in zip(headers[3:], range(3, pointcloud.shape[1])):
-                column = pointcloud[:, i]
-                if header == 'classification':
-                    las.classification = column
-                else:
-                    las.add_extra_dim(laspy.ExtraBytesParams(name=header, type="f8"))
+            if len(headers) != 0:
+                #  The reverse step below just puts the headings in the preferred order. They are backwards without it.
+                headers = headers[3:]  # Trim off X, Y, Z
+                headers.reverse()
+                col_idxs = list(range(3, pointcloud.shape[1]))
+                col_idxs.reverse()
+                for header, i in zip(headers, col_idxs):
+                    column = pointcloud[:, i]
+                    las.add_extra_dim(laspy.ExtraBytesParams(name=header, type="f4"))
                     setattr(las, header, column)
+            header_names = list(las.point_format.dimension_names)
+            las.write(filename)
+            if not silent:
+                print("Saved to:", filename)
 
-        las.write(filename)
-        print("Saved to:", filename)
-
-    elif filename[-4:] == '.csv':
-        pd.DataFrame(pointcloud).to_csv(filename, header=headers, index=None, sep=' ')
-        print("Saved to:", filename)
+        elif filename[-4:] == '.csv':
+            pd.DataFrame(pointcloud).to_csv(filename, header=None, index=None, sep=' ')
+            print("Saved to:", filename)
 
 
 def get_heights_above_DTM(points, DTM):
@@ -129,12 +136,10 @@ def get_heights_above_DTM(points, DTM):
 
 def clustering(points, eps=0.05, min_samples=2):
     print("Clustering...")
-    db = DBSCAN(eps=eps, min_samples=min_samples, metric='euclidean', algorithm='kd_tree', n_jobs=-1).fit(
-            points[:, :3])
-    # db = OPTICS(eps=eps, min_cluster_size=min_samples,metric='euclidean', algorithm='kd_tree',cluster_method="dbscan",leaf_size=10000,n_jobs=-1).fit(points[:,:3])
+    db = DBSCAN(eps=eps, min_samples=min_samples, metric='euclidean', algorithm='kd_tree', n_jobs=-1).fit(points[:, :3])
     return np.hstack((points, np.atleast_2d(db.labels_).T))
 
 
 
-if __name__=='__main__':
-    pc, headers = load_file('C:/Users/seank/Downloads/CULS/CULS/plot_1_annotated_FSCT_output/plot_1_annotated_5_m_crop_segmented.las')
+# if __name__=='__main__':
+#     pc, headers = load_file('C:/Users/seank/Downloads/CULS/CULS/plot_1_annotated_FSCT_output/full_cyl_array.las')

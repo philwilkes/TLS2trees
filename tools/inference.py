@@ -12,6 +12,7 @@ from scipy import spatial
 import os
 import time
 from tools import load_file, save_file
+import shutil
 
 
 class TestingDataset(Dataset, ABC):
@@ -115,7 +116,7 @@ class SemanticSegmentation:
 
         self.output = np.asarray(choose_most_confident_label(self.output_point_cloud, original_point_cloud), dtype='float64')
         self.output[:, :3] = self.output[:, :3] + global_shift
-        save_file(self.directory + self.filename[:-4] + '_segmented.las', self.output, ['x', 'y', 'z', 'terrain_prob', 'vegetation_prob', 'CWD_prob', 'stem_prob', 'Classification'])
+        save_file(self.directory + self.filename[:-4] + '_segmented.las', self.output, ['x', 'y', 'z', 'terrain_prob', 'vegetation_prob', 'CWD_prob', 'stem_prob', 'label'])
 
         self.sem_seg_end_time = time.time()
         self.sem_seg_total_time = self.sem_seg_end_time - self.sem_seg_start_time
@@ -124,3 +125,6 @@ class SemanticSegmentation:
         times.to_csv(self.output_dir + 'run_times.csv', index=False)
         print("Semantic segmentation took", self.sem_seg_total_time, 's')
         print("Semantic segmentation done")
+        if self.parameters['delete_working_directory']:
+            shutil.rmtree(self.working_dir, ignore_errors=True)
+

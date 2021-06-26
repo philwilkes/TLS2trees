@@ -17,7 +17,7 @@ if __name__ == '__main__':
         print(point_cloud)
 
         parameters = dict(input_point_cloud=point_cloud,
-                          batch_size=20,
+                          batch_size=18,
                           num_procs=20,
                           max_diameter=5,
                           slice_thickness=0.2,#default = 0.2
@@ -36,22 +36,22 @@ if __name__ == '__main__':
                           UTM_zone_letter=None,
                           UTM_is_north=False,
                           filter_noise=0,
-                          low_resolution_point_cloud_hack_mode=0)
+                          low_resolution_point_cloud_hack_mode=2)
 
         parameters.update(other_parameters)
 
-        # preprocessing1 = Preprocessing(parameters)
-        # preprocessing1.preprocess_point_cloud()
-        #
-        # sem_seg = SemanticSegmentation(parameters)
-        # sem_seg.inference()
-        #
-        # object_1 = PostProcessing(parameters)
-        # # object_1.process_point_cloud(point_cloud=sem_seg.output)
-        # object_1.process_point_cloud()
-        #
-        # del sem_seg
+        preprocessing1 = Preprocessing(parameters)
+        preprocessing1.preprocess_point_cloud()
 
-        measure1 = MeasureTree(parameters)
-        measure1.run_measurement_extraction()
+        sem_seg = SemanticSegmentation(parameters)
+        sem_seg.inference()
+
+        object_1 = PostProcessing(parameters)
+        # object_1.process_point_cloud(point_cloud=sem_seg.output)
+        object_1.process_point_cloud()
+        #
+        del sem_seg
+        #
+        # measure1 = MeasureTree(parameters)
+        # measure1.run_measurement_extraction()
         # del measure1

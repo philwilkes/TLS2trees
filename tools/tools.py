@@ -115,7 +115,7 @@ def save_file(filename, pointcloud, headers=[], silent=False):
                 col_idxs.reverse()
                 for header, i in zip(headers, col_idxs):
                     column = pointcloud[:, i]
-                    las.add_extra_dim(laspy.ExtraBytesParams(name=header, type="f4"))
+                    las.add_extra_dim(laspy.ExtraBytesParams(name=header, type="f8"))
                     setattr(las, header, column)
             header_names = list(las.point_format.dimension_names)
             las.write(filename)

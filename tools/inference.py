@@ -70,7 +70,8 @@ class SemanticSegmentation:
         self.working_dir = self.directory + self.filename[:-4] + '_FSCT_output/working_directory/'
 
         if self.parameters['plot_radius'] != 0:
-            self.filename = self.filename[:-4] + '_FSCT_output/' + self.filename[:-4] + '_' + str(self.parameters['plot_radius']) + '_m_crop.las'
+            self.filename = self.filename[:-4] + '_' + str(self.parameters['plot_radius']) + '_m_crop.las'
+            self.directory = self.output_dir
 
     def inference(self):
         test_dataset = TestingDataset(root_dir=self.working_dir,
@@ -78,7 +79,7 @@ class SemanticSegmentation:
                                       device=self.device)
 
         test_loader = DataLoader(test_dataset, batch_size=self.parameters['batch_size'], shuffle=False,
-                                 num_workers=0)
+                                 num_workers=0, pin_memory=True)
 
         global_shift = np.loadtxt(self.working_dir + 'global_shift.csv', dtype='float64')
 
@@ -88,7 +89,7 @@ class SemanticSegmentation:
         num_boxes = test_dataset.__len__()
         with torch.no_grad():
             self.output_point_cloud = np.zeros((0, 3 + 4))
-
+            output_list = []
             for i, data in enumerate(test_loader):
                 print('\r' + str(i * self.parameters['batch_size']) + '/' + str(num_boxes))
                 data = data.to(self.device)
@@ -98,14 +99,16 @@ class SemanticSegmentation:
                 out = torch.softmax(out.cpu().detach(), axis=1)
                 pos = data.pos.cpu()
                 output = np.hstack((pos, out))
+
                 for batch in batches:
                     outputb = np.asarray(output[data.batch.cpu() == batch])
                     outputb[:, :3] = outputb[:, :3] + np.asarray(data.local_shift.cpu())[3 * batch:3 + (3 * batch)]
-                    self.output_point_cloud = np.vstack((self.output_point_cloud, outputb))
-
+                    # self.output_point_cloud = np.vstack((self.output_point_cloud, outputb))
+                    output_list.append(outputb)
+            self.output_point_cloud = np.vstack(output_list)
             print('\r' + str(num_boxes)+'/'+str(num_boxes))
         del outputb, out, batches, pos, output  # clean up anything no longer needed to free RAM.
-        print(self.directory + self.filename)
+        print(self.working_dir + self.filename)
         original_point_cloud, headers = load_file(self.directory + self.filename)
         original_point_cloud = original_point_cloud[:, :3]
         original_point_cloud[:, :3] = original_point_cloud[:, :3] - global_shift

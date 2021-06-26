@@ -43,9 +43,11 @@ class Preprocessing:
         if self.parameters['low_resolution_point_cloud_hack_mode']:
             print('Using low resolution point cloud hack mode...')
             print('Original point cloud shape:', self.point_cloud.shape)
-            duplicated = deepcopy(self.point_cloud)
-            duplicated[:, :3] = duplicated[:, :3] + np.random.normal(-0.01, 0.01, size=(duplicated.shape[0], 3))
-            self.point_cloud = np.vstack((self.point_cloud, duplicated))
+            for i in range(self.parameters['low_resolution_point_cloud_hack_mode']):
+                duplicated = deepcopy(self.point_cloud)
+                duplicated[:, :3] = duplicated[:, :3] + np.random.normal(-0.01, 0.01, size=(duplicated.shape[0], 3))
+                self.point_cloud = np.vstack((self.point_cloud, duplicated))
+
             print('Hacked point cloud shape:', self.point_cloud.shape)
 
         self.global_shift = [np.mean(self.point_cloud[:, 0]), np.mean(self.point_cloud[:, 1]),

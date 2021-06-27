@@ -49,13 +49,13 @@ class PostProcessing:
         self.point_cloud = np.hstack((self.point_cloud, np.zeros((self.point_cloud.shape[0], 1))))  # Add height above DTM column
         self.headers.append('height_above_DTM')  # Add height_above_DTM to the headers.
 
-    def make_DTM(self, clustering_epsilon=0.1, min_cluster_points=250, smoothing_radius=1, crop_dtm=False):
+    def make_DTM(self, clustering_epsilon=0.3, min_cluster_points=250, smoothing_radius=1, crop_dtm=False):
         print("Making DTM...")
         """
         This function will generate a Digital Terrain Model (DTM) based on the terrain labelled points.
         """
-        if self.terrain_points.shape[0] <= 1000:
-            self.terrain_points_subsampled = subsample_point_cloud(self.terrain_points, 0.005)
+        if self.terrain_points.shape[0] >= 1000:
+            self.terrain_points_subsampled = subsample_point_cloud(self.terrain_points, 0.1)
             if self.terrain_points_subsampled.shape[0] <= 100:
                 self.terrain_points_subsampled = self.terrain_points
 

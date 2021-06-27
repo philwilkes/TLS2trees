@@ -8,11 +8,14 @@ import tkinter as tk
 import tkinter.filedialog as fd
 from other_parameters import other_parameters
 if __name__ == '__main__':
-    root = tk.Tk()
-    point_clouds_to_process = fd.askopenfilenames(parent=root, title='Choose files', filetypes=[("LAS", "*.las"),
-                                                                                                ("CSV", "*.csv")])
-    root.destroy()
-    # point_clouds_to_process = ['C:/Users/seank/Downloads/CULS/CULS/plot_1_annotated.las']
+    # root = tk.Tk()
+    # point_clouds_to_process = fd.askopenfilenames(parent=root, title='Choose files', filetypes=[("LAS", "*.las"),
+                                                                                                # ("CSV", "*.csv")])
+    # root.destroy()
+    point_clouds_to_process = [
+            # 'C:/Users/seank/Downloads/CULS/CULS/plot_1_annotated.las',
+            'C:/Users/seank/OneDrive - University of Tasmania/2. NDT Project 2020/NSW/Shared/s2p1test.las']
+    plot_centres = [None]
     for point_cloud in point_clouds_to_process:
         print(point_cloud)
 
@@ -32,26 +35,28 @@ if __name__ == '__main__':
                           PlotID='not_specified',
                           plot_centre=None,
                           plot_radius=5,
+                          intelligent_plot_cropping=1,
+                          plot_radius_buffer=3,
                           UTM_zone_number=50,
                           UTM_zone_letter=None,
                           UTM_is_north=False,
                           filter_noise=0,
-                          low_resolution_point_cloud_hack_mode=2)
+                          low_resolution_point_cloud_hack_mode=0) #TODO could add this mode to measure.
 
         parameters.update(other_parameters)
 
-        preprocessing1 = Preprocessing(parameters)
-        preprocessing1.preprocess_point_cloud()
+        # preprocessing = Preprocessing(parameters)
+        # preprocessing.preprocess_point_cloud()
+        # del preprocessing
 
-        sem_seg = SemanticSegmentation(parameters)
-        sem_seg.inference()
+        # sem_seg = SemanticSegmentation(parameters)
+        # sem_seg.inference()
+        # del sem_seg
 
-        object_1 = PostProcessing(parameters)
-        # object_1.process_point_cloud(point_cloud=sem_seg.output)
-        object_1.process_point_cloud()
-        #
-        del sem_seg
-        #
-        # measure1 = MeasureTree(parameters)
-        # measure1.run_measurement_extraction()
-        # del measure1
+        # object_1 = PostProcessing(parameters)
+        # object_1.process_point_cloud()
+        # del object_1
+
+        measure1 = MeasureTree(parameters)
+        measure1.run_measurement_extraction()
+        del measure1

@@ -15,7 +15,7 @@ from scipy.interpolate import griddata
 from skimage.measure import LineModelND, CircleModel, ransac
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import NearestNeighbors
-from tools import load_file, save_file
+from tools import load_file, save_file, low_resolution_hack_mode
 
 sys.setrecursionlimit(10 ** 6)  # TODO test if necessary...
 
@@ -35,6 +35,10 @@ class MeasureTree:
         self.min_tree_volume = parameters['min_tree_volume']
 
         self.stem_points, headers = load_file(self.output_dir + 'stem_points.las')
+        if self.parameters['low_resolution_point_cloud_hack_mode']:
+            self.stem_points = low_resolution_hack_mode(self.stem_points, self.parameters['low_resolution_point_cloud_hack_mode'])
+            save_file(self.output_dir + self.filename[:-4] + '_stem_points_hack_mode_cloud.las', self.stem_points)
+
         self.vegetation_points, headers = load_file(self.output_dir + 'vegetation_points.las')
         self.vegetation_points = self.vegetation_points[:, :3]
         self.vegetation_points = np.hstack((self.vegetation_points, np.zeros((self.vegetation_points.shape[0], 2))))
@@ -1141,15 +1145,13 @@ class MeasureTree:
         for tree_id in np.unique(cleaned_cyls[:, self.cyl_dict['tree_id']]):
             tree = cleaned_cyls[cleaned_cyls[:, self.cyl_dict['tree_id']] == tree_id]
 
-            tree_vegetation = assigned_vegetation_points[
-                assigned_vegetation_points[:, self.veg_dict['tree_id']] == tree_id]
+            tree_vegetation = assigned_vegetation_points[assigned_vegetation_points[:, self.veg_dict['tree_id']] == tree_id]
             combined = np.vstack((tree[:, :3], tree_vegetation[:, :3]))
             combined = np.hstack((combined, np.zeros((combined.shape[0], 1))))
             combined = self.get_heights_above_DTM(combined)
 
             # Get highest point of tree. Note, there is usually noise, so we use the 95th percentile.
-            tree_max_point = combined[
-                abs(combined[:, 2] - np.percentile(combined[:, 2], 95, interpolation='nearest')).argmin()]
+            tree_max_point = combined[abs(combined[:, 2] - np.percentile(combined[:, 2], 95, interpolation='nearest')).argmin()]
 
             tree_base_point = deepcopy(combined[np.argmin(combined[:, -1])])
             z_tree_base = tree_base_point[2] - tree_base_point[-1]
@@ -1222,33 +1224,19 @@ class MeasureTree:
                 this_trees_data[:, tree_data_dict['Crown_top_x']] = tree_max_point[0]
                 this_trees_data[:, tree_data_dict['Crown_top_y']] = tree_max_point[1]
                 this_trees_data[:, tree_data_dict['Crown_top_z']] = tree_max_point[2]
-                this_trees_data[:,
-                tree_data_dict['mean_understory_height_in_10m_radius']] = mean_understory_height_in_10m_radius
+                this_trees_data[:, tree_data_dict['mean_understory_height_in_10m_radius']] = mean_understory_height_in_10m_radius
                 tree_data = np.vstack((tree_data, this_trees_data))
 
             text_size = 0.00256
             line_height = 0.025
-            if DBH_Z != 0:
-                line0 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y + line_height, DBH_Z + line_height,
-                                                     DBH * 0.5,
-                                                     '            DIAM: ' + str(np.around(DBH, 2)) + 'm')
-                line1 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y, DBH_Z, DBH * 0.5,
-                                                     '       CCI AT BH: ' + str(np.around(mean_CCI_at_BH, 2)))
-                line2 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 2 * line_height, DBH_Z - 2 * line_height,
-                                                     DBH * 0.5,
-                                                     '          HEIGHT: ' + str(np.around(tree_height, 2)) + 'm')
-                line3 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height, DBH_Z - 3 * line_height,
-                                                     DBH * 0.5,
-                                                     '          VOLUME: ' + str(np.around(volume, 2)) + 'm')
-                line4 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height, DBH_Z - 4 * line_height,
-                                                     DBH * 0.5,
-                                                     '    CHECK VOLUME: ' + str(
-                                                             np.around((np.pi * (0.5 * DBH) ** 2) * tree_height,
-                                                                       2)) + 'm')
+            if DBH_X != 0 and DBH_Y != 0 and DBH_Z != 0 and x_tree_base != 0 and y_tree_base != 0:
+                line0 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y + line_height, DBH_Z + line_height, DBH * 0.5, '            DIAM: ' + str(np.around(DBH, 2)) + 'm')
+                line1 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y, DBH_Z, DBH * 0.5, '       CCI AT BH: ' + str(np.around(mean_CCI_at_BH, 2)))
+                line2 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 2 * line_height, DBH_Z - 2 * line_height, DBH * 0.5, '          HEIGHT: ' + str(np.around(tree_height, 2)) + 'm')
+                line3 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height, DBH_Z - 3 * line_height, DBH * 0.5, '          VOLUME: ' + str(np.around(volume, 2)) + 'm')
+                line4 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height, DBH_Z - 4 * line_height, DBH * 0.5, '    CHECK VOLUME: ' + str(np.around((np.pi * (0.5 * DBH) ** 2) * tree_height, 2)) + 'm')
 
-                height_measurement_line = self.points_along_line(x_tree_base, y_tree_base, z_tree_base, y_tree_base,
-                                                                 x_tree_base, z_tree_base + tree_height,
-                                                                 resolution=0.025)
+                height_measurement_line = self.points_along_line(x_tree_base, y_tree_base, z_tree_base, x_tree_base, y_tree_base, z_tree_base + tree_height, resolution=0.025)
 
                 dbh_circle_points = self.create_3d_circles_as_points_flat(DBH_X, DBH_Y, DBH_Z, DBH / 2,
                                                                           circle_points=100)

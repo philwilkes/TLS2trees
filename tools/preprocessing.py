@@ -9,7 +9,7 @@ import matplotlib
 from scipy import spatial
 from sklearn.neighbors import NearestNeighbors
 import threading
-from tools import load_file, save_file, make_folder_structure
+from tools import load_file, save_file, make_folder_structure, subsample_point_cloud, low_resolution_hack_mode
 import os
 
 
@@ -41,14 +41,8 @@ class Preprocessing:
         self.point_cloud = self.point_cloud[:, :3]  # Trims off unneeded dimensions if present.
 
         if self.parameters['low_resolution_point_cloud_hack_mode']:
-            print('Using low resolution point cloud hack mode...')
-            print('Original point cloud shape:', self.point_cloud.shape)
-            for i in range(self.parameters['low_resolution_point_cloud_hack_mode']):
-                duplicated = deepcopy(self.point_cloud)
-                duplicated[:, :3] = duplicated[:, :3] + np.random.normal(-0.01, 0.01, size=(duplicated.shape[0], 3))
-                self.point_cloud = np.vstack((self.point_cloud, duplicated))
-
-            print('Hacked point cloud shape:', self.point_cloud.shape)
+            self.point_cloud = low_resolution_hack_mode(self.point_cloud, self.parameters['low_resolution_point_cloud_hack_mode'])
+            save_file(self.output_dir + self.filename[:-4] + '_hack_mode_cloud.las', self.point_cloud)
 
         self.global_shift = [np.mean(self.point_cloud[:, 0]), np.mean(self.point_cloud[:, 1]),
                              np.mean(self.point_cloud[:, 2])]

@@ -9,6 +9,7 @@ import os
 import shutil
 from sklearn.cluster import DBSCAN
 from scipy.interpolate import griddata
+from copy import deepcopy
 
 
 def make_folder_structure(filename):
@@ -101,7 +102,7 @@ def save_file(filename, pointcloud, headers=[], silent=False):
         if filename[-4:] == '.las':
             las = laspy.create(file_version="1.4", point_format=6)
             las.header.offsets = np.min(pointcloud[:, :3], axis=0)
-            las.header.scales = [0.0001, 0.0001, 0.0001]
+            las.header.scales = [0.001, 0.001, 0.001]
 
             las.x = pointcloud[:, 0]
             las.y = pointcloud[:, 1]
@@ -117,7 +118,7 @@ def save_file(filename, pointcloud, headers=[], silent=False):
                     column = pointcloud[:, i]
                     las.add_extra_dim(laspy.ExtraBytesParams(name=header, type="f8"))
                     setattr(las, header, column)
-            header_names = list(las.point_format.dimension_names)
+
             las.write(filename)
             if not silent:
                 print("Saved to:", filename)
@@ -140,6 +141,20 @@ def clustering(points, eps=0.05, min_samples=2):
     return np.hstack((points, np.atleast_2d(db.labels_).T))
 
 
+def low_resolution_hack_mode(point_cloud, num_iterations):
+    print('Using low resolution point cloud hack mode...')
+    print('Original point cloud shape:', point_cloud.shape)
+    point_cloud_original = deepcopy(point_cloud)
+    for i in range(num_iterations):
+        duplicated = deepcopy(point_cloud_original)
 
+        duplicated[:, :3] = duplicated[:, :3] + np.hstack(
+                (np.random.normal(-0.025, 0.025, size=(duplicated.shape[0], 1)),
+                 np.random.normal(-0.025, 0.025, size=(duplicated.shape[0], 1)),
+                 np.random.normal(-0.025, 0.025, size=(duplicated.shape[0], 1))))
+        point_cloud = np.vstack((point_cloud, duplicated))
+        point_cloud = subsample_point_cloud(point_cloud, 0.01)
+    print('Hacked point cloud shape:', point_cloud.shape)
+    return point_cloud
 # if __name__=='__main__':
 #     pc, headers = load_file('C:/Users/seank/Downloads/CULS/CULS/plot_1_annotated_FSCT_output/full_cyl_array.las')

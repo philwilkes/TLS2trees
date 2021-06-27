@@ -119,7 +119,7 @@ class SemanticSegmentation:
 
         self.output = np.asarray(choose_most_confident_label(self.output_point_cloud, original_point_cloud), dtype='float64')
         self.output[:, :3] = self.output[:, :3] + global_shift
-        save_file(self.directory + self.filename[:-4] + '_segmented.las', self.output, ['x', 'y', 'z', 'terrain_prob', 'vegetation_prob', 'CWD_prob', 'stem_prob', 'label'])
+        save_file(self.output_dir + self.filename[:-4] + '_segmented.las', self.output, ['x', 'y', 'z', 'terrain_prob', 'vegetation_prob', 'CWD_prob', 'stem_prob', 'label'])
 
         self.sem_seg_end_time = time.time()
         self.sem_seg_total_time = self.sem_seg_end_time - self.sem_seg_start_time

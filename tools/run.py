@@ -7,10 +7,10 @@ from measure import MeasureTree
 import tkinter as tk
 import tkinter.filedialog as fd
 from other_parameters import other_parameters
+
 if __name__ == '__main__':
     # root = tk.Tk()
-    # point_clouds_to_process = fd.askopenfilenames(parent=root, title='Choose files', filetypes=[("LAS", "*.las"),
-                                                                                                # ("CSV", "*.csv")])
+    # point_clouds_to_process = fd.askopenfilenames(parent=root, title='Choose files', filetypes=[("LAS", "*.las"), ("CSV", "*.csv")])
     # root.destroy()
     point_clouds_to_process = [
             # 'C:/Users/seank/Downloads/CULS/CULS/plot_1_annotated.las',
@@ -23,9 +23,9 @@ if __name__ == '__main__':
                           batch_size=18,
                           num_procs=20,
                           max_diameter=5,
-                          slice_thickness=0.2,#default = 0.2
-                          slice_increment=0.05,#default = 0.05
-                          slice_clustering_distance=0.2, #default = 0.1
+                          slice_thickness=0.2,  # default = 0.2
+                          slice_increment=0.05,  # default = 0.05
+                          slice_clustering_distance=0.2,  # default = 0.1
                           cleaned_measurement_radius=0.18,
                           minimum_CCI=0.3,
                           min_tree_volume=0.005,
@@ -41,7 +41,7 @@ if __name__ == '__main__':
                           UTM_zone_letter=None,
                           UTM_is_north=False,
                           filter_noise=0,
-                          low_resolution_point_cloud_hack_mode=0) #TODO could add this mode to measure.
+                          low_resolution_point_cloud_hack_mode=0)  # TODO could add this mode to measure.
 
         parameters.update(other_parameters)
 

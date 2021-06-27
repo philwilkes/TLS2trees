@@ -24,8 +24,7 @@ class MeasureTree:
     def __init__(self, parameters):
         self.parameters = parameters
         self.filename = self.parameters['input_point_cloud'].replace('\\', '/')
-        self.output_dir = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/' + \
-                          self.filename.split('/')[-1][:-4] + '_FSCT_output/'
+        self.output_dir = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/' + self.filename.split('/')[-1][:-4] + '_FSCT_output/'
         self.filename = self.filename.split('/')[-1]
 
         self.num_procs = parameters['num_procs']
@@ -36,7 +35,8 @@ class MeasureTree:
 
         self.stem_points, headers = load_file(self.output_dir + 'stem_points.las')
         if self.parameters['low_resolution_point_cloud_hack_mode']:
-            self.stem_points = low_resolution_hack_mode(self.stem_points, self.parameters['low_resolution_point_cloud_hack_mode'])
+            self.stem_points = low_resolution_hack_mode(self.stem_points,
+                                                        self.parameters['low_resolution_point_cloud_hack_mode'])
             save_file(self.output_dir + self.filename[:-4] + '_stem_points_hack_mode_cloud.las', self.stem_points)
 
         self.vegetation_points, headers = load_file(self.output_dir + 'vegetation_points.las')
@@ -54,27 +54,10 @@ class MeasureTree:
 
         for i in self.characters:
             self.character_viz.append(np.genfromtxt('../tools/numbers/' + i + '.csv', delimiter=','))
-        self.cyl_dict = {'x'                     : 0,  # DO NOT CHANGE
-                         'y'                     : 1,  # DO NOT CHANGE
-                         'z'                     : 2,  # DO NOT CHANGE
-                         'nx'                    : 3,  # DO NOT CHANGE
-                         'ny'                    : 4,  # DO NOT CHANGE
-                         'nz'                    : 5,  # DO NOT CHANGE
-                         'radius'                : 6,
-                         'CCI'                   : 7,
-                         'branch_id'             : 8,
-                         'parent_branch_id'      : 9,
-                         'tree_id'               : 10,
-                         'segment_volume'        : 11,
-                         'segment_angle_to_horiz': 12,
-                         'height_above_dtm'      : 13
-                         }
-        self.veg_dict = {'x'               : 0,
-                         'y'               : 1,
-                         'z'               : 2,
-                         'tree_id'         : 3,
-                         'height_above_dtm': 4
-                         }
+        self.cyl_dict = dict(x=0, y=1, z=2, nx=3, ny=4, nz=5, radius=6, CCI=7, branch_id=8, parent_branch_id=9,
+                             tree_id=10, segment_volume=11, segment_angle_to_horiz=12, height_above_dtm=13)
+
+        self.veg_dict = dict(x=0, y=1, z=2, tree_id=3, height_above_dtm=4)
 
         self.kml = simplekml.Kml()
         self.text_point_cloud = np.zeros((0, 3))
@@ -149,7 +132,8 @@ class MeasureTree:
 
         max_tree_label = 1
 
-        cylinder_array = cylinder_array[cylinder_array[:, self.cyl_dict['radius']] != 0]  # ignore all points with radius of 0.
+        cylinder_array = cylinder_array[
+            cylinder_array[:, self.cyl_dict['radius']] != 0]  # ignore all points with radius of 0.
         unsorted_points = cylinder_array
 
         sorted_points = np.zeros((0, unsorted_points.shape[1]))
@@ -626,14 +610,13 @@ class MeasureTree:
                     print('\r', i, '/', max_i, end='')
                 i += 1
                 # print('{:4.2f} m'.format(slice_height))
-                new_slice = self.stem_points[np.logical_and(self.stem_points[:, 2] >= slice_height, self.stem_points[:,
-                                                                                                    2] < slice_height + self.slice_thickness)]
+                new_slice = self.stem_points[np.logical_and(self.stem_points[:, 2] >= slice_height, self.stem_points[:, 2] < slice_height + self.slice_thickness)]
                 if new_slice.shape[0] > 0:
                     input_data.append([new_slice, self.parameters['slice_clustering_distance']])
                     # np.savetxt(self.directory+'data/postprocessed_point_clouds/'+self.input_point_cloud+'/new_slice_'+str(i)+'.csv',new_slice)
             print('\r', max_i, '/', max_i, end='')
             print('\nDone\n')
-            cluster_array = np.zeros((0, 6))
+
             print("Starting multithreaded slice clustering...")
             j = 0
             max_j = len(input_data)
@@ -729,7 +712,8 @@ class MeasureTree:
             # cyl_array = [x,y,z,nx,ny,nz,r,CCI,branch_id,tree_id,segment_volume,parent_branch_id]
             print("Saving cylinder array...")
             save_file(self.output_dir + 'full_cyl_array.las', full_cyl_array, headers=list(self.cyl_dict))
-        full_cyl_array, _ = load_file(self.output_dir + 'full_cyl_array.las', headers_of_interest=list(self.cyl_dict)[3:])
+        full_cyl_array, _ = load_file(self.output_dir + 'full_cyl_array.las',
+                                      headers_of_interest=list(self.cyl_dict)[3:])
         print(full_cyl_array.shape, _, self.cyl_dict)
         print("Sorting Cylinders...")
         full_cyl_array = self.cylinder_sorting(full_cyl_array,
@@ -808,9 +792,10 @@ class MeasureTree:
                     tree[:, self.cyl_dict['tree_id']] = t_id
                     sorted_full_cyl_array = np.vstack((sorted_full_cyl_array, tree))
                     t_id += 1
-        print(9,sorted_full_cyl_array.shape)
+        print(9, sorted_full_cyl_array.shape)
         save_file(self.output_dir + 'sorted_full_cyl_array.las', sorted_full_cyl_array, headers=list(self.cyl_dict))
-        sorted_full_cyl_array, _ = load_file(self.output_dir + 'sorted_full_cyl_array.las', headers_of_interest=list(self.cyl_dict)[3:])
+        sorted_full_cyl_array, _ = load_file(self.output_dir + 'sorted_full_cyl_array.las',
+                                             headers_of_interest=list(self.cyl_dict)[3:])
 
         max_search_radius = 4.
         # max_search_angle = 15
@@ -926,7 +911,9 @@ class MeasureTree:
         print('\r', max_j, '/', max_j, end='')
         print('\nDone\n')
 
-        save_file(self.output_dir + 'cleaned_cyls.las', cleaned_cyls, headers=['x', 'y', 'z', 'nx', 'ny', 'nz', 'radius', 'CCI', 'branch_id', 'tree_id', 'segment_volume', 'parent_branch_id'])
+        save_file(self.output_dir + 'cleaned_cyls.las', cleaned_cyls,
+                  headers=['x', 'y', 'z', 'nx', 'ny', 'nz', 'radius', 'CCI', 'branch_id', 'tree_id', 'segment_volume',
+                           'parent_branch_id'])
 
         if 1:
             print("Making cleaned cylinder visualisation...")
@@ -946,28 +933,39 @@ class MeasureTree:
             print('\nDone\n')
 
             print("\nSaving cylinder visualisation...")
-            save_file(self.output_dir + 'cleaned_cyl_vis.las', cleaned_cyl_vis, headers=['x', 'y', 'z', 'radius', 'CCI', 'branch_id', 'tree_id', 'segment_volume', 'parent_branch_id'])
+            save_file(self.output_dir + 'cleaned_cyl_vis.las', cleaned_cyl_vis,
+                      headers=['x', 'y', 'z', 'radius', 'CCI', 'branch_id', 'tree_id', 'segment_volume',
+                               'parent_branch_id'])
 
         if 1:
             veg_step_distance = 1
             num_veg_assignment_iterations = 10
             self.vegetation_points = self.get_heights_above_DTM(self.vegetation_points)
-            self.ground_veg = self.vegetation_points[self.vegetation_points[:, self.veg_dict['height_above_dtm']] <= self.parameters['ground_veg_cutoff_height']]
-            self.vegetation_points = self.vegetation_points[self.vegetation_points[:, self.veg_dict['height_above_dtm']] > self.parameters['ground_veg_cutoff_height']]
+            self.ground_veg = self.vegetation_points[
+                self.vegetation_points[:, self.veg_dict['height_above_dtm']] <= self.parameters[
+                    'ground_veg_cutoff_height']]
+            self.vegetation_points = self.vegetation_points[
+                self.vegetation_points[:, self.veg_dict['height_above_dtm']] > self.parameters[
+                    'ground_veg_cutoff_height']]
 
             stem_kdtree = spatial.cKDTree(cleaned_cyls[:, :3], leafsize=1000)
             results = stem_kdtree.query(self.vegetation_points[:, :3], k=1, distance_upper_bound=veg_step_distance)
 
             if self.parameters['canopy_mode'] == 'continuous':
                 print('Sorting vegetation points using continous mode.')
-                self.vegetation_points[results[0] < veg_step_distance, self.veg_dict['tree_id']] = cleaned_cyls[results[1][results[0] < veg_step_distance], self.cyl_dict['tree_id']]
-                assigned_vegetation_points = self.vegetation_points[self.vegetation_points[:, self.veg_dict['tree_id']] != 0]
-                unassigned_vegetation_points = self.vegetation_points[self.vegetation_points[:, self.veg_dict['tree_id']] == 0]
+                self.vegetation_points[results[0] < veg_step_distance, self.veg_dict['tree_id']] = cleaned_cyls[
+                    results[1][results[0] < veg_step_distance], self.cyl_dict['tree_id']]
+                assigned_vegetation_points = self.vegetation_points[
+                    self.vegetation_points[:, self.veg_dict['tree_id']] != 0]
+                unassigned_vegetation_points = self.vegetation_points[
+                    self.vegetation_points[:, self.veg_dict['tree_id']] == 0]
                 print('vege', assigned_vegetation_points.shape, unassigned_vegetation_points.shape)
 
                 for iteration in range(0, num_veg_assignment_iterations):
-                    assigned_vegetation_points_kdtree = spatial.cKDTree(assigned_vegetation_points[:, :3], leafsize=1000)
-                    results = assigned_vegetation_points_kdtree.query(unassigned_vegetation_points[:, :3], k=1, distance_upper_bound=veg_step_distance)
+                    assigned_vegetation_points_kdtree = spatial.cKDTree(assigned_vegetation_points[:, :3],
+                                                                        leafsize=1000)
+                    results = assigned_vegetation_points_kdtree.query(unassigned_vegetation_points[:, :3], k=1,
+                                                                      distance_upper_bound=veg_step_distance)
                     # Assign the label of the nearest vegetation if less than 3 m away.
                     unassigned_vegetation_points[results[0] < veg_step_distance, self.veg_dict['tree_id']] = assigned_vegetation_points[results[1][results[0] < veg_step_distance], self.veg_dict['tree_id']]
 
@@ -992,7 +990,7 @@ class MeasureTree:
                     # Assign the label of the nearest vegetation if less than 3 m away.
                     unassigned_vegetation_points[results[0] < veg_step_distance, self.veg_dict['tree_id']] = assigned_vegetation_points[results[1][results[0] < veg_step_distance], self.veg_dict['tree_id']]
 
-                    assigned_vegetation_points = np.vstack((assigned_vegetation_points, unassigned_vegetation_points[ unassigned_vegetation_points[:, self.veg_dict['tree_id']] != 0]))
+                    assigned_vegetation_points = np.vstack((assigned_vegetation_points, unassigned_vegetation_points[unassigned_vegetation_points[:, self.veg_dict['tree_id']] != 0]))
                     unassigned_vegetation_points = unassigned_vegetation_points[unassigned_vegetation_points[:, self.veg_dict['tree_id']] == 0]
 
                 for iteration in range(0, 5):
@@ -1016,10 +1014,8 @@ class MeasureTree:
             ymin = np.floor(np.min(self.terrain_points[:, 1]))
             xmax = np.ceil(np.max(self.terrain_points[:, 0]))
             ymax = np.ceil(np.max(self.terrain_points[:, 1]))
-            x_points = np.linspace(xmin, xmax,
-                                   int(np.ceil((xmax - xmin) / self.parameters['Canopy_coverage_resolution'])) + 1)
-            y_points = np.linspace(ymin, ymax,
-                                   int(np.ceil((ymax - ymin) / self.parameters['Canopy_coverage_resolution'])) + 1)
+            x_points = np.linspace(xmin, xmax, int(np.ceil((xmax - xmin) / self.parameters['Canopy_coverage_resolution'])) + 1)
+            y_points = np.linspace(ymin, ymax, int(np.ceil((ymax - ymin) / self.parameters['Canopy_coverage_resolution'])) + 1)
 
             convexhull = spatial.ConvexHull(self.terrain_points[:, :2])
             canopy_density = np.zeros((0, 4))
@@ -1124,34 +1120,24 @@ class MeasureTree:
         canopy_density_kd_tree = spatial.cKDTree(canopy_density[:, :2])
         ground_veg_kd_tree = spatial.cKDTree(self.ground_veg[:, :2])
 
-        tree_data_dict = {'Site'                                : 0,
-                          'PlotID'                              : 1,
-                          'treeNo'                              : 2,
-                          'x_tree_base'                         : 3,
-                          'y_tree_base'                         : 4,
-                          'z_tree_base'                         : 5,
-                          'DBH'                                 : 6,
-                          'Height'                              : 7,
-                          'Volume'                              : 8,
-                          'Crown_mean_x'                        : 9,
-                          'Crown_mean_y'                        : 10,
-                          'Crown_top_x'                         : 11,
-                          'Crown_top_y'                         : 12,
-                          'Crown_top_z'                         : 13,
-                          'mean_understory_height_in_10m_radius': 14,
-                          }
+        tree_data_dict = dict(Site=0, PlotID=1, treeNo=2, x_tree_base=3, y_tree_base=4, z_tree_base=5, DBH=6, Height=7,
+                              Volume=8, Crown_mean_x=9, Crown_mean_y=10, Crown_top_x=11, Crown_top_y=12, Crown_top_z=13,
+                              mean_understory_height_in_10m_radius=14)
+
         tree_data = np.zeros((0, 15))
 
         for tree_id in np.unique(cleaned_cyls[:, self.cyl_dict['tree_id']]):
             tree = cleaned_cyls[cleaned_cyls[:, self.cyl_dict['tree_id']] == tree_id]
 
-            tree_vegetation = assigned_vegetation_points[assigned_vegetation_points[:, self.veg_dict['tree_id']] == tree_id]
+            tree_vegetation = assigned_vegetation_points[
+                assigned_vegetation_points[:, self.veg_dict['tree_id']] == tree_id]
             combined = np.vstack((tree[:, :3], tree_vegetation[:, :3]))
             combined = np.hstack((combined, np.zeros((combined.shape[0], 1))))
             combined = self.get_heights_above_DTM(combined)
 
             # Get highest point of tree. Note, there is usually noise, so we use the 95th percentile.
-            tree_max_point = combined[abs(combined[:, 2] - np.percentile(combined[:, 2], 95, interpolation='nearest')).argmin()]
+            tree_max_point = combined[
+                abs(combined[:, 2] - np.percentile(combined[:, 2], 95, interpolation='nearest')).argmin()]
 
             tree_base_point = deepcopy(combined[np.argmin(combined[:, -1])])
             z_tree_base = tree_base_point[2] - tree_base_point[-1]
@@ -1230,13 +1216,21 @@ class MeasureTree:
             text_size = 0.00256
             line_height = 0.025
             if DBH_X != 0 and DBH_Y != 0 and DBH_Z != 0 and x_tree_base != 0 and y_tree_base != 0:
-                line0 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y + line_height, DBH_Z + line_height, DBH * 0.5, '            DIAM: ' + str(np.around(DBH, 2)) + 'm')
-                line1 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y, DBH_Z, DBH * 0.5, '       CCI AT BH: ' + str(np.around(mean_CCI_at_BH, 2)))
-                line2 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 2 * line_height, DBH_Z - 2 * line_height, DBH * 0.5, '          HEIGHT: ' + str(np.around(tree_height, 2)) + 'm')
-                line3 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height, DBH_Z - 3 * line_height, DBH * 0.5, '          VOLUME: ' + str(np.around(volume, 2)) + 'm')
-                line4 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height, DBH_Z - 4 * line_height, DBH * 0.5, '    CHECK VOLUME: ' + str(np.around((np.pi * (0.5 * DBH) ** 2) * tree_height, 2)) + 'm')
+                line0 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y + line_height, DBH_Z + line_height,
+                                                     DBH * 0.5, '            DIAM: ' + str(np.around(DBH, 2)) + 'm')
+                line1 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y, DBH_Z, DBH * 0.5,
+                                                     '       CCI AT BH: ' + str(np.around(mean_CCI_at_BH, 2)))
+                line2 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 2 * line_height, DBH_Z - 2 * line_height,
+                                                     DBH * 0.5,
+                                                     '          HEIGHT: ' + str(np.around(tree_height, 2)) + 'm')
+                line3 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height, DBH_Z - 3 * line_height,
+                                                     DBH * 0.5, '          VOLUME: ' + str(np.around(volume, 2)) + 'm')
+                line4 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height, DBH_Z - 4 * line_height,
+                                                     DBH * 0.5, '    CHECK VOLUME: ' + str(np.around((np.pi * (0.5 * DBH) ** 2) * tree_height, 2)) + 'm')
 
-                height_measurement_line = self.points_along_line(x_tree_base, y_tree_base, z_tree_base, x_tree_base, y_tree_base, z_tree_base + tree_height, resolution=0.025)
+                height_measurement_line = self.points_along_line(x_tree_base, y_tree_base, z_tree_base, x_tree_base,
+                                                                 y_tree_base, z_tree_base + tree_height,
+                                                                 resolution=0.025)
 
                 dbh_circle_points = self.create_3d_circles_as_points_flat(DBH_X, DBH_Y, DBH_Z, DBH / 2,
                                                                           circle_points=100)
@@ -1244,6 +1238,8 @@ class MeasureTree:
                                                    height_measurement_line, dbh_circle_points))
 
         save_file(self.output_dir + 'text_point_cloud.las', self.text_point_cloud)
-        save_file(self.output_dir + 'sorted_tree_points.las', sorted_tree_points, headers=['x', 'y', 'z', 'TreeID', 'height_above_DTM'])
-        pd.DataFrame(tree_data).to_csv(self.output_dir + 'tree_data.csv', header=[i for i in tree_data_dict], index=None, sep=',')
+        save_file(self.output_dir + 'sorted_tree_points.las', sorted_tree_points,
+                  headers=['x', 'y', 'z', 'TreeID', 'height_above_DTM'])
+        pd.DataFrame(tree_data).to_csv(self.output_dir + 'tree_data.csv', header=[i for i in tree_data_dict],
+                                       index=None, sep=',')
         self.kml.save(self.output_dir + 'Plot_Extents.kml')

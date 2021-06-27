@@ -61,7 +61,9 @@ def subsample_point_cloud(X, min_spacing):
     return X
 
 
-def load_file(filename, plot_centre=None, plot_radius=0, silent=False, headers_of_interest = []):
+def load_file(filename, plot_centre=None, plot_radius=0, silent=False, headers_of_interest=None):
+    if headers_of_interest is None:
+        headers_of_interest = []
     if not silent:
         print('Loading file...', filename)
     file_extension = filename[-4:]
@@ -93,9 +95,11 @@ def load_file(filename, plot_centre=None, plot_radius=0, silent=False, headers_o
     return pointcloud, coord_headers + output_headers
 
 
-def save_file(filename, pointcloud, headers=[], silent=False):
+def save_file(filename, pointcloud, headers=None, silent=False):
+    if headers is None:
+        headers = []
     if pointcloud.shape[0] == 0:
-        print(filename,'is empty...')
+        print(filename, 'is empty...')
     else:
         if not silent:
             print('Saving file...')

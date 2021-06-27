@@ -130,4 +130,3 @@ class SemanticSegmentation:
         print("Semantic segmentation done")
         if self.parameters['delete_working_directory']:
             shutil.rmtree(self.working_dir, ignore_errors=True)
-

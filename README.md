@@ -1,18 +1,19 @@
 # Forest Structural Complexity Tool
-## Created by Sean Krisanski
-This tool was written for the purpose of processing high-resolution forest point clouds from a variety of sensor
-sources including Terrestrial Laser Scanning (TLS), Mobile Laser Scanning (MLS), Terrestrial Photogrammetry, Above 
-or below-canopy UAS Photogrammetry or similar. It is built using Pytorch https://pytorch.org/ and Pytorch-Geometric 
+### Created by Sean Krisanski
+## Purpose of this tool
+
+This tool was written for the purpose of allowing plot based measurements to be extracted automatically from most
+high-resolution forest point clouds from a variety of sensor sources. Such sensor types it works on include
+Terrestrial Laser Scanning (TLS), Mobile Laser Scanning (MLS), Terrestrial Photogrammetry, Above and below-canopy
+UAS Photogrammetry or similar. 
+
+The deep learning component uses Pytorch https://pytorch.org/ and Pytorch-Geometric 
 https://pytorch-geometric.readthedocs.io/en/latest/#
 
 ## General Concept
 The first step is semantic segmentation of the forest point cloud. This is performed using a modified version of
 Pointnet++ https://github.com/charlesq34/pointnet2 using the implementation in Pytorch-Geometric as a starting point
 provided here: https://github.com/rusty1s/pytorch_geometric/blob/master/examples/pointnet2_segmentation.py
-
-
-## Purpose of this tool
-
 
 
 ## Citation
@@ -30,6 +31,16 @@ https://doi.org/10.3390/rs13081413
 Krisanski, S.; Taskhiri, M.S.; Gonzalez Aracil, S.; Herries, D.; Turner, P. Forest Structural Complexity Tool - An Open
 Source, Fully-Automated Tool for Measuring Forest Point Clouds. Remote Sens. 2021, XX, XXXX. 
 https://doi.org/XX.XXXX/rsXXXXXXXX
+
+## Acknowledgements
+This research was funded by the Australian Research Council - Training Centre for Forest Value 
+(University of Tasmania, Australia).
+
+Thanks to my supervisory team Assoc. Prof Paul Turner and Dr. Mohammad Sadegh Taskhiri from the eLogistics Research
+Group and Dr. James Montgomery from the University of Tasmania.
+
+Thanks to Susana Gonzalez Aracil and David Herries from Interpine Group Ltd. (New Zealand), who provided a number of the raw point
+clouds and plot measurements used during the development and validation of this tool.
 
 
 ## Contributing
@@ -49,8 +60,9 @@ take a while if you are running it on a lesser setup than below.
 
 I use the following setup and the computational times are bearable:
 - CPU: Intel i9-10900K Overclocked to 4.99GHz all cores.
-- GPU: Nvidia Titan RTX (24GB vRAM)
-- RAM: 128 GB DDR4 at 3200 MHz (NOTE: this is often not enough on large point clouds, so I have a 500 GB swap file to assist if I run out of RAM).
+- GPU: Nvidia Titan RTX (24 GB vRAM)
+- RAM: 128 GB DDR4 at 3200 MHz (NOTE: this is often not enough on large point clouds, so I have a 500 GB page file to assist if I run out of RAM).
+- SSD: M.2 NVMe 2 TB, 3500 MB/s read,  3000 MB/s write.
 
 Hopefully in time, I'll be able to make this more efficient and less resource hungry.
 

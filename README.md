@@ -11,12 +11,12 @@ Pointnet++ https://github.com/charlesq34/pointnet2 using the implementation in P
 provided here: https://github.com/rusty1s/pytorch_geometric/blob/master/examples/pointnet2_segmentation.py
 
 
-##Purpose of this tool
+## Purpose of this tool
 
 
 
 ## Citation
-###If you find this tool helpful or use this tool in your research, please cite these two papers:
+### If you find this tool helpful or use this tool in your research, please cite these two papers:
 
 **The semantic segmentation tool is described here:**
 \
@@ -32,15 +32,15 @@ Source, Fully-Automated Tool for Measuring Forest Point Clouds. Remote Sens. 202
 https://doi.org/XX.XXXX/rsXXXXXXXX
 
 
-##Contributing##
+## Contributing
 Interested in contributing to this code? Get in touch! This code is likely far from optimal, so if you find errors or 
 have ideas/suggestions on improvements, they would be very welcome!
 
-##How to use
+## How to use
 It is strongly recommended to have a CUDA compatible GPU (Nvidia) for running this tool. This can be run on CPU
 only, but expect inference to take a long time.
 
-###Recommended PC Specifications
+### Recommended PC Specifications
 **Warning: FSCT is computationally expensive in its current form.** Fortunately, it is still considerably faster than a human 
 at what it does.
 
@@ -54,23 +54,23 @@ I use the following setup and the computational times are bearable:
 
 Hopefully in time, I'll be able to make this more efficient and less resource hungry.
 
-###User Parameters
-####batch_size
+### User Parameters
+#### batch_size
 The number of samples in a batch used for the deep learning inference. This number depends on the amount of GPU RAM you
 have. If you set this too high, you will run out of GPU RAM. As a rough guide, I can fit 18-20 on an Nvidia Titan RTX GPU with 24 GB GPU
 RAM.
 
-####num_procs
+#### num_procs
 The number of CPU cores you have/wish to use.
 
-####max_diameter
+#### max_diameter
 Fairly self-explanatory. Trims away any diameter measurements larger than this value. This is rarely needed, so 
 generally just leave it much larger than the largest tree in your plot. I generally don't change it.
 
 
 
 
-####slice_thickness
+#### slice_thickness
 
 
 
@@ -93,11 +93,11 @@ UTM_is_north=False,
 filter_noise=0,
 low_resolution_point_cloud_hack_mode=0) #TODO could add this mode to measure.
 
-###Other Parameters (Changing these parameters is not recommended)
+### Other Parameters (Changing these parameters is not recommended)
 
 
 
-###Intelligent Plot Cropping
+### Intelligent Plot Cropping
 The purpose of this mode is to trim a point cloud to a specified plot radius, without removing points from trees that
 are considered to be in the plot.
 
@@ -108,7 +108,7 @@ and terrain points to the specified plot_radius.
 
 
 
-###Low resolution hack mode...
+### Low resolution hack mode...
 This model was trained on relatively high resolution point clouds, so if a stem is of sufficiently low resolution,
 it will likely be classified as vegetation instead. Eventually, I will train this model on a larger training dataset
 with more examples of sparse point clouds, however, in the meantime, I came up with an abomination of a hack that

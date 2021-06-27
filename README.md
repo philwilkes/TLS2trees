@@ -32,7 +32,7 @@ Source, Fully-Automated Tool for Measuring Forest Point Clouds. Remote Sens. 202
 https://doi.org/XX.XXXX/rsXXXXXXXX
 
 
-##Contributing
+##Contributing##
 Interested in contributing to this code? Get in touch! This code is likely far from optimal, so if you find errors or 
 have ideas/suggestions on improvements, they would be very welcome!
 

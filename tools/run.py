@@ -29,7 +29,7 @@ if __name__ == '__main__':
             if 'FSCT_output' not in i:
                 point_clouds_to_process.append(i)
     else:
-        point_clouds_to_process = fd.askopenfilenames(parent=root, title='Choose files', filetypes=[("LAS", "*.las"), ("CSV", "*.csv")])
+        point_clouds_to_process = fd.askopenfilenames(parent=root, title='Choose files', filetypes=[("LAS", "*.las"), ("LAZ", "*.laz"), ("CSV", "*.csv")])
     root.destroy()
 
     for point_cloud in point_clouds_to_process:
@@ -51,8 +51,8 @@ if __name__ == '__main__':
                           Site='not_specified',
                           PlotID='not_specified',
                           plot_centre=None,
-                          plot_radius=4,
-                          plot_radius_buffer=3,
+                          plot_radius=0,
+                          plot_radius_buffer=0,
                           UTM_zone_number=50,
                           UTM_zone_letter=None,
                           UTM_is_north=False,
@@ -61,18 +61,18 @@ if __name__ == '__main__':
 
         parameters.update(other_parameters)
 
-        # preprocessing = Preprocessing(parameters)
-        # preprocessing.preprocess_point_cloud()
-        # del preprocessing
-        #
-        # sem_seg = SemanticSegmentation(parameters)
-        # sem_seg.inference()
-        # del sem_seg
-        #
+        preprocessing = Preprocessing(parameters)
+        preprocessing.preprocess_point_cloud()
+        del preprocessing
+
+        sem_seg = SemanticSegmentation(parameters)
+        sem_seg.inference()
+        del sem_seg
+
         # object_1 = PostProcessing(parameters)
         # object_1.process_point_cloud()
         # del object_1
-
+        #
         # measure1 = MeasureTree(parameters)
         # measure1.run_measurement_extraction()
         # del measure1

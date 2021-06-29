@@ -690,7 +690,7 @@ class MeasureTree:
         print('Correcting Cylinder assignments...')
         sorted_full_cyl_array = np.zeros((0, full_cyl_array.shape[1]))
         t_id = 1
-        max_search_radius = 1.
+        max_search_radius = 3.
         min_points = 5
         max_search_angle = 30
         max_tree_id = np.unique(full_cyl_array[:, self.cyl_dict['tree_id']]).shape[0]
@@ -812,6 +812,7 @@ class MeasureTree:
 
             lowest_measured_tree_point = deepcopy(current_tree[np.argmin(current_tree[:, -1])])
             tree_base_point = deepcopy(current_tree[np.argmin(current_tree[:, -1])])
+            tree_base_point[2] = tree_base_point[2] - tree_base_point[-1]
             interpolated_to_ground = self.interpolate_cyl(lowest_measured_tree_point, tree_base_point,
                                                           resolution=self.slice_increment)
             interpolated_full_cyl_array = np.vstack((interpolated_full_cyl_array, interpolated_to_ground))
@@ -1135,7 +1136,7 @@ class MeasureTree:
                 this_trees_data[:, tree_data_dict['mean_understory_height_in_10m_radius']] = mean_understory_height_in_10m_radius
 
                 if intelligent_plot_cropping:
-                    if np.linalg.norm([x_tree_base, y_tree_base] - plot_centre) < plot_radius + plot_radius_buffer:
+                    if np.linalg.norm([x_tree_base, y_tree_base] - plot_centre) < self.parameters['plot_radius']:
                         tree_data = np.vstack((tree_data, this_trees_data))
                         stem_points_sorted = np.vstack((stem_points_sorted, tree_points))
                         veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))

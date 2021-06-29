@@ -40,12 +40,10 @@ def augmentations(X, no_terrain, no_cwd):
 
     def random_scale_change(points, min_multiplier, max_multiplier):
         points = points * np.random.uniform(min_multiplier, max_multiplier)
-        # points[:,:3] = points[:,:3] + np.random.uniform(-5,5,size=(1,3))
         return points
 
-    def random_point_removal(self,points):
+    def random_point_removal(points):
         idx = list(range(np.shape(points)[0]))
-        random.shuffle(idx)
         random.shuffle(idx)
         return points[:int(np.random.uniform(0.5,1)*np.shape(points)[0]), :]
 
@@ -85,9 +83,9 @@ class TrainingDataset(Dataset, ABC):
     def __getitem__(self, index):
         point_cloud = np.load(self.filenames[index])
         if point_cloud.shape[0] > self.points_per_box:
-            l = list(range(point_cloud.shape[0]))
-            random.shuffle(l)
-            point_cloud = point_cloud[l[:self.points_per_box]]
+            shuffle_index = list(range(point_cloud.shape[0]))
+            random.shuffle(shuffle_index)
+            point_cloud = point_cloud[shuffle_index[:self.points_per_box]]
 
         X = point_cloud[:, :3]
         y = point_cloud[:, self.label_index]
@@ -162,10 +160,7 @@ class GlobalSAModule(torch.nn.Module, ABC):
 
 
 def MLP(channels, batch_norm=True):
-    return Seq(*[
-            Seq(Lin(channels[i - 1], channels[i]), ReLU(), BN(channels[i]))
-            for i in range(1, len(channels))
-    ])
+    return Seq(*[Seq(Lin(channels[i - 1], channels[i]), ReLU(), BN(channels[i])) for i in range(1, len(channels))])
 
 
 class FPModule(torch.nn.Module, ABC):
@@ -211,7 +206,6 @@ class Net(torch.nn.Module, ABC):
         x = x.permute(0, 2, 1)
         x = self.drop1(F.relu(self.bn1(self.conv1(x))))
         x = self.conv2(x)
-        # x = F.log_softmax(x, dim=1)
         return x
 
 

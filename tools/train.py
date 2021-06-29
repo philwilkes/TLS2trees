@@ -1,5 +1,4 @@
 from abc import ABC
-
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn import knn_interpolate
@@ -15,6 +14,60 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR
 import os
 from sklearn.neighbors import NearestNeighbors
+from tools import subsample_point_cloud, load_file, save_file
+
+
+def augmentations(X, no_terrain, no_cwd):
+    def rotate_3d(points, rotations):
+        rotations[0] = math.radians(rotations[0])
+        rotations[1] = math.radians(rotations[1])
+        rotations[2] = math.radians(rotations[2])
+
+        roll_mat = np.array([[1, 0, 0],
+                             [0, math.cos(rotations[0]), -math.sin(rotations[0])],
+                             [0, math.sin(rotations[0]), math.cos(rotations[0])]])
+
+        pitch_mat = np.array([[math.cos(rotations[1]), 0, math.sin(rotations[1])],
+                              [0, 1, 0],
+                              [-math.sin(rotations[1]), 0, math.cos(rotations[1])]])
+
+        yaw_mat = np.array([[math.cos(rotations[2]), -math.sin(rotations[2]), 0],
+                            [math.sin(rotations[2]), math.cos(rotations[2]), 0],
+                            [0, 0, 1]])
+
+        points[:, :3] = np.matmul(np.matmul(np.matmul(points[:, :3], roll_mat), pitch_mat), yaw_mat)
+        return points
+
+    def random_scale_change(points, min_multiplier, max_multiplier):
+        points = points * np.random.uniform(min_multiplier, max_multiplier)
+        # points[:,:3] = points[:,:3] + np.random.uniform(-5,5,size=(1,3))
+        return points
+
+    def random_point_removal(self,points):
+        idx = list(range(np.shape(points)[0]))
+        random.shuffle(idx)
+        random.shuffle(idx)
+        return points[:int(np.random.uniform(0.5,1)*np.shape(points)[0]), :]
+
+    def random_noise_addition(points):
+        # 50% chance per sample of adding noise.
+        random_noise_std_dev = np.random.uniform(0.01, 0.025)
+        if np.random.uniform(0, 1) >= 0.5:
+            points = points + np.random.normal(0, random_noise_std_dev, size=(np.shape(points)[0], 3))
+        return points
+
+    if no_terrain and no_cwd:
+        rotations = [np.random.uniform(-90, 90), np.random.uniform(-90, 90),
+                     np.random.uniform(-180, 180)]  # np.random.randint(0,3)*90]
+    else:
+        rotations = [np.random.uniform(-5, 5), np.random.uniform(-5, 5),
+                     np.random.uniform(-180, 180)]  # np.random.randint(0,3)*90]
+    X = rotate_3d(X, rotations)
+    X = random_scale_change(X, 0.8, 1.2)
+    # if np.random.uniform(0,1) >= 0.5:
+    # X = subsample_point_cloud(X,y,np.random.uniform(0.01,0.025))
+    X = random_noise_addition(X)
+    return X
 
 
 class TrainingDataset(Dataset, ABC):
@@ -38,7 +91,7 @@ class TrainingDataset(Dataset, ABC):
 
         X = point_cloud[:, :3]
         y = point_cloud[:, self.label_index]
-        X = self.augmentations(X, np.all(y != 0), np.all(y != 2))  # Check if any terrain or CWD is present
+        X = augmentations(X, np.all(y != 0), np.all(y != 2))  # Check if any terrain or CWD is present
         if np.all(y != 0):
             y[y == 2] = 3  # if no ground is present, CWD is relabelled as stem.
         X = torch.from_numpy(X.copy()).type(torch.float).to(self.device)
@@ -51,84 +104,10 @@ class TrainingDataset(Dataset, ABC):
         data = Data(pos=X, x=None, y=y)
         return data
 
-    def augmentations(self, X, no_terrain, no_cwd):
-        # def subsample_point_cloud(X,y,min_spacing):
-        #     neighbours = NearestNeighbors(n_neighbors=2, algorithm='kd_tree',metric='euclidean').fit(X[:,:3])
-        #     distances, indices = neighbours.kneighbors(X[:,:3])
-        #     X_keep = X[distances[:,1]>=min_spacing]
-        #     y_keep = y[distances[:,1]>=min_spacing]
-        #     i1 = [distances[:,1]<min_spacing][0]
-        #     i2 = [X[indices[:,0],2]<X[indices[:,1],2]][0]
-        #     X_check = X[np.logical_and(i1,i2)]
-        #     y_check = y[np.logical_and(i1,i2)]
-
-        #     while np.shape(X_check)[0] > 1:
-        #         neighbours = NearestNeighbors(n_neighbors=2, algorithm='kd_tree',metric='euclidean').fit(X_check[:,:3])
-        #         distances, indices = neighbours.kneighbors(X_check[:,:3])
-        #         X_keep = np.vstack((X_keep,X_check[distances[:,1]>=min_spacing,:]))
-        #         y_keep = np.vstack((y_keep,y_check[distances[:,1]>=min_spacing]))
-        #         i1 = [distances[:,1]<min_spacing][0]
-        #         i2 = [X_check[indices[:,0],2]<X_check[indices[:,1],2]][0]
-        #         X_check = X_check[np.logical_and(i1,i2)]
-        #         y_check = y_check[np.logical_and(i1,i2)]
-        #     X = X_keep
-        #     y = y_check
-        #     return X,y
-
-        def rotate_3d(points, rotations):
-            rotations[0] = math.radians(rotations[0])
-            rotations[1] = math.radians(rotations[1])
-            rotations[2] = math.radians(rotations[2])
-
-            roll_mat = np.array([[1, 0, 0],
-                                 [0, math.cos(rotations[0]), -math.sin(rotations[0])],
-                                 [0, math.sin(rotations[0]), math.cos(rotations[0])]])
-
-            pitch_mat = np.array([[math.cos(rotations[1]), 0, math.sin(rotations[1])],
-                                  [0, 1, 0],
-                                  [-math.sin(rotations[1]), 0, math.cos(rotations[1])]])
-
-            yaw_mat = np.array([[math.cos(rotations[2]), -math.sin(rotations[2]), 0],
-                                [math.sin(rotations[2]), math.cos(rotations[2]), 0],
-                                [0, 0, 1]])
-
-            points[:, :3] = np.matmul(np.matmul(np.matmul(points[:, :3], roll_mat), pitch_mat), yaw_mat)
-            return points
-
-        def random_scale_change(points, min_multiplier, max_multiplier):
-            points = points * np.random.uniform(min_multiplier, max_multiplier)
-            # points[:,:3] = points[:,:3] + np.random.uniform(-5,5,size=(1,3))
-            return points
-
-        def random_noise_addition(points):
-            # 50% chance per sample of adding noise.
-            random_noise_std_dev = np.random.uniform(0.01, 0.025)
-            if np.random.uniform(0, 1) >= 0.5:
-                points = points + np.random.normal(0, random_noise_std_dev, size=(np.shape(points)[0], 3))
-            return points
-
-        if no_terrain and no_cwd:
-            rotations = [np.random.uniform(-90, 90), np.random.uniform(-90, 90),
-                         np.random.uniform(-180, 180)]  # np.random.randint(0,3)*90]
-        else:
-            rotations = [np.random.uniform(-5, 5), np.random.uniform(-5, 5),
-                         np.random.uniform(-180, 180)]  # np.random.randint(0,3)*90]
-        X = rotate_3d(X, rotations)
-        X = random_scale_change(X, 0.8, 1.2)
-        # if np.random.uniform(0,1) >= 0.5:
-        # X = subsample_point_cloud(X,y,np.random.uniform(0.01,0.025))
-        X = random_noise_addition(X)
-        return X
-
-        # def random_point_removal(self,points):
-        #         idx = list(range(np.shape(points)[0]))
-        #         random.shuffle(idx)
-        #         random.shuffle(idx)
-        #         return points[:int(np.random.uniform(0.5,1)*np.shape(points)[0]),:]
-
 
 class TestingDataset(Dataset, ABC):
     def __init__(self, dataset_name, root_dir, points_per_box, device):
+        super().__init__()
         self.filenames = glob.glob(root_dir + dataset_name + '*.npy')
         self.points_per_box = points_per_box
         self.label_index = 6
@@ -239,53 +218,28 @@ class Net(torch.nn.Module, ABC):
 if __name__ == '__main__':
     from preprocessing import Preprocessing
 
-    # TODO plot learning rate
-    parameters = {'directory'              : '../',
-                  'load_existing_model'    : 1,
-                  'num_epochs'             : 2000,
-                  'learning_rate'          : 0.000025,  # 0.0001, #0.00005 originally
-                  'fileset'                : None,
-                  'input_point_cloud'      : None,
-                  'model_filename'         : 'model7_no_noise_smaller_batches.pth',
-                  'box_dimensions'         : [6, 6, 6],
-                  'box_overlap'            : [0.75, 0.75, 0.75],
-                  # 'box_overlap':[0.,0.,0.],
-                  'min_points_per_box'     : 1000,
-                  'max_points_per_box'     : 20000,
-                  'subsample'              : False,
-                  'subsampling_min_spacing': 0.025,
-                  'num_procs'              : 20,
-                  'batch_size'             : 8,
-                  }
+    parameters = dict(directory='../', load_existing_model=1, num_epochs=2000, learning_rate=0.000025, fileset=None,
+                      input_point_cloud=None, model_filename='model7_no_noise_smaller_batches.pth',
+                      box_dimensions=[6, 6, 6], box_overlap=[0.75, 0.75, 0.75], min_points_per_box=1000,
+                      max_points_per_box=20000, subsample=False, subsampling_min_spacing=0.025, num_procs=20,
+                      batch_size=8)
 
-
-    def folder_structure(parameters):
-        if not os.path.isdir(parameters['directory'] + "data/original_point_clouds"):
-            os.makedirs(parameters['directory'] + "data/original_point_clouds")
-            print('Created "data/original_point_clouds" directory')
-
-        if not os.path.isdir(
-                parameters['directory'] + "data/working_directory/" + parameters['input_point_cloud'][:-4]):
-            os.makedirs(parameters['directory'] + "data/working_directory/" + parameters['input_point_cloud'][:-4])
-            print('Created "data/working_directory"')
-
-
-    if 0:
-        parameters['fileset'] = 'train_aug'
-        parameters['input_point_cloud'] = 'final_train_aug.csv'
-        folder_structure(parameters)
-        preprocessing = Preprocessing(parameters)
-        preprocessing.load_point_cloud(
-            filename=parameters['directory'] + 'data/original_point_clouds/' + parameters['input_point_cloud'])
-        preprocessing.preprocess_point_cloud()
-    if 0:
-        parameters['fileset'] = 'test_aug'
-        parameters['input_point_cloud'] = 'final_validation_aug.csv'
-        folder_structure(parameters)
-        preprocessing = Preprocessing(parameters)
-        preprocessing.load_point_cloud(
-            filename=parameters['directory'] + 'data/original_point_clouds/' + parameters['input_point_cloud'])
-        preprocessing.preprocess_point_cloud()
+    # if 0:
+    #     parameters['fileset'] = 'train_aug'
+    #     parameters['input_point_cloud'] = 'final_train_aug.csv'
+    #     folder_structure(parameters)
+    #     preprocessing = Preprocessing(parameters)
+    #     preprocessing.load_point_cloud(
+    #         filename=parameters['directory'] + 'data/original_point_clouds/' + parameters['input_point_cloud'])
+    #     preprocessing.preprocess_point_cloud()
+    # if 0:
+    #     parameters['fileset'] = 'test_aug'
+    #     parameters['input_point_cloud'] = 'final_validation_aug.csv'
+    #     folder_structure(parameters)
+    #     preprocessing = Preprocessing(parameters)
+    #     preprocessing.load_point_cloud(
+    #         filename=parameters['directory'] + 'data/original_point_clouds/' + parameters['input_point_cloud'])
+    #     preprocessing.preprocess_point_cloud()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -328,8 +282,6 @@ if __name__ == '__main__':
         model.load_state_dict(torch.load(parameters['directory'] + 'model/' + parameters['model_filename']),
                               strict=False)
     optimiser = optim.Adam(model.parameters(), lr=parameters['learning_rate'])
-    # optimiser = optim.SGD(net.parameters(), lr = parameters['learning_rate'])
-    # scheduler = ExponentialLR(optimiser, gamma=0.7)
 
     if parameters['load_existing_model']:
         try:
@@ -370,18 +322,14 @@ if __name__ == '__main__':
             optimizer.zero_grad()
             out = model(data)
             out = out.permute(2, 1, 0).squeeze()
-            # criterion = torch.nn.CrossEntropyLoss(torch.Tensor([0.85,0.85,0.85,1,0.85]).to(device))
-            # criterion = torch.nn.CrossEntropyLoss(torch.Tensor([1.0,1.0,0.998,0.999]).to(device))
-            # criterion = torch.nn.CrossEntropyLoss(torch.Tensor([0.98,0.9725,0.915,0.85]).to(device))
+
             criterion = torch.nn.CrossEntropyLoss()
             loss = criterion(out, data.y)
-            # loss = F.nll_loss(out, data.y)
             loss.backward()
 
             optimizer.step()
             total_loss += loss.item()
             out = np.argmax(out.cpu().detach(), axis=1)
-            # print((np.array(out)==np.array(data.y.cpu())).sum())
             correct_nodes += (np.array(out) == np.array(data.y.cpu())).sum()
             total_nodes += data.num_nodes
             train_acc = correct_nodes / total_nodes

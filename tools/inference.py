@@ -50,11 +50,13 @@ def choose_most_confident_label(point_cloud, original_point_cloud):
     neighbours = NearestNeighbors(n_neighbors=16, algorithm='kd_tree', metric='euclidean', radius=0.05).fit(
             point_cloud[:, :3])
     _, indices = neighbours.kneighbors(original_point_cloud[:, :3])
+
     labels = np.zeros((original_point_cloud.shape[0], 5))
     labels[:, :4] = np.median(point_cloud[indices][:, :, -4:], axis=1)
     labels[:, 4] = np.argmax(labels[:, :4], axis=1)
-    # original_point_cloud = np.hstack((original_point_cloud, np.atleast_2d(labels[:, -5]).T))
-    original_point_cloud = np.hstack((original_point_cloud, labels))
+
+    # original_point_cloud = np.hstack((original_point_cloud, labels))
+    original_point_cloud = np.hstack((original_point_cloud, labels[:, 4:]))
     return original_point_cloud
 
 
@@ -108,9 +110,7 @@ class SemanticSegmentation:
             self.output_point_cloud = np.vstack(output_list)
             print('\r' + str(num_boxes)+'/'+str(num_boxes))
         del outputb, out, batches, pos, output  # clean up anything no longer needed to free RAM.
-        print(self.working_dir + self.filename)
-        original_point_cloud, headers = load_file(self.directory + self.filename)
-        original_point_cloud = original_point_cloud[:, :3]
+        original_point_cloud, headers = load_file(self.directory + self.filename, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
         original_point_cloud[:, :3] = original_point_cloud[:, :3] - global_shift
 
         if self.parameters['subsample']:
@@ -119,7 +119,7 @@ class SemanticSegmentation:
 
         self.output = np.asarray(choose_most_confident_label(self.output_point_cloud, original_point_cloud), dtype='float64')
         self.output[:, :3] = self.output[:, :3] + global_shift
-        save_file(self.output_dir + self.filename[:-4] + '_segmented.las', self.output, ['x', 'y', 'z', 'terrain_prob', 'vegetation_prob', 'CWD_prob', 'stem_prob', 'label'])
+        save_file(self.output_dir + self.filename[:-4] + '_segmented.las', self.output, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label'])
 
         self.sem_seg_end_time = time.time()
         self.sem_seg_total_time = self.sem_seg_end_time - self.sem_seg_start_time

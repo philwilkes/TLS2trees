@@ -7,15 +7,31 @@ from measure import MeasureTree
 import tkinter as tk
 import tkinter.filedialog as fd
 from other_parameters import other_parameters
+import glob
+import os
+
 
 if __name__ == '__main__':
-    # root = tk.Tk()
-    # point_clouds_to_process = fd.askopenfilenames(parent=root, title='Choose files', filetypes=[("LAS", "*.las"), ("CSV", "*.csv")])
-    # root.destroy()
-    point_clouds_to_process = [
-            # 'C:/Users/seank/Downloads/CULS/CULS/plot_1_annotated.las',
-            'C:/Users/seank/OneDrive - University of Tasmania/2. NDT Project 2020/NSW/Shared/s2p1test.las']
-    plot_centres = [None]
+    """
+    If you want to select individual files, leave directory_mode set to 0 or False.
+    If you want to process ALL '.las' files within a directory and its sub-directories, set directory_mode to 1 or True.
+    "Directory mode" will ignore FSCT_output '.las' files.
+    """
+
+    directory_mode = 0
+
+    root = tk.Tk()
+    if directory_mode:
+        point_clouds_to_process = []
+        directory = fd.askdirectory(parent=root, title='Choose directory')
+        unfiltered_point_clouds_to_process = glob.glob(directory + '/**/*.las', recursive=True)
+        for i in unfiltered_point_clouds_to_process:
+            if 'FSCT_output' not in i:
+                point_clouds_to_process.append(i)
+    else:
+        point_clouds_to_process = fd.askopenfilenames(parent=root, title='Choose files', filetypes=[("LAS", "*.las"), ("CSV", "*.csv")])
+    root.destroy()
+
     for point_cloud in point_clouds_to_process:
         print(point_cloud)
 
@@ -30,12 +46,12 @@ if __name__ == '__main__':
                           minimum_CCI=0.3,
                           min_tree_volume=0.005,
                           ground_veg_cutoff_height=3,
+                          veg_sorting_range=5,
                           canopy_mode='continuous',
                           Site='not_specified',
                           PlotID='not_specified',
                           plot_centre=None,
-                          plot_radius=5,
-                          intelligent_plot_cropping=1,
+                          plot_radius=4,
                           plot_radius_buffer=3,
                           UTM_zone_number=50,
                           UTM_zone_letter=None,
@@ -48,15 +64,15 @@ if __name__ == '__main__':
         # preprocessing = Preprocessing(parameters)
         # preprocessing.preprocess_point_cloud()
         # del preprocessing
-
+        #
         # sem_seg = SemanticSegmentation(parameters)
         # sem_seg.inference()
         # del sem_seg
-
+        #
         # object_1 = PostProcessing(parameters)
         # object_1.process_point_cloud()
         # del object_1
 
-        measure1 = MeasureTree(parameters)
-        measure1.run_measurement_extraction()
-        del measure1
+        # measure1 = MeasureTree(parameters)
+        # measure1.run_measurement_extraction()
+        # del measure1

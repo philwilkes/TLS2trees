@@ -7,10 +7,11 @@ high-resolution forest point clouds from a variety of sensor sources. Such senso
 Terrestrial Laser Scanning (TLS), Mobile Laser Scanning (MLS), Terrestrial Photogrammetry, Above and below-canopy
 UAS Photogrammetry or similar. 
 
+## References
+
 The deep learning component uses Pytorch https://pytorch.org/ and Pytorch-Geometric 
 https://pytorch-geometric.readthedocs.io/en/latest/#
 
-## General Concept
 The first step is semantic segmentation of the forest point cloud. This is performed using a modified version of
 Pointnet++ https://github.com/charlesq34/pointnet2 using the implementation in Pytorch-Geometric as a starting point
 provided here: https://github.com/rusty1s/pytorch_geometric/blob/master/examples/pointnet2_segmentation.py

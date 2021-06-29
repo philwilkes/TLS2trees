@@ -61,24 +61,23 @@ def subsample_point_cloud(X, min_spacing):
     return X
 
 
-def load_file(filename, plot_centre=None, plot_radius=0, silent=False, headers_of_interest=None):
+def load_file(filename, plot_centre=None, plot_radius=0, plot_radius_buffer=0, silent=False, headers_of_interest=None, output_directory=None):
     if headers_of_interest is None:
         headers_of_interest = []
     if not silent:
         print('Loading file...', filename)
     file_extension = filename[-4:]
+    coord_headers = ['x', 'y', 'z']
     output_headers = []
 
     if file_extension == '.las' or file_extension == '.laz':
         inFile = laspy.read(filename)
         header_names = list(inFile.point_format.dimension_names)
-        print(header_names)
-        coord_headers = ['X', 'Y', 'Z']
         pointcloud = np.vstack((inFile.x, inFile.y, inFile.z))
         if len(headers_of_interest) != 0:
+            headers_of_interest = headers_of_interest[3:]
             for header in headers_of_interest:
                 if header in header_names:
-                    print(header)
                     pointcloud = np.vstack((pointcloud, getattr(inFile, header)))
                     output_headers.append(header)
         pointcloud = pointcloud.transpose()
@@ -88,23 +87,25 @@ def load_file(filename, plot_centre=None, plot_radius=0, silent=False, headers_o
 
     if plot_centre is None and plot_radius > 0:
         plot_centre = np.mean(pointcloud[:, :2], axis=0)
-
+        if output_directory is not None:
+            np.savetxt(output_directory + 'plot_centre_coords.csv', plot_centre)
         distances = np.linalg.norm(pointcloud[:, :2] - plot_centre, axis=1)
-        keep_points = distances < plot_radius
+        keep_points = distances < plot_radius + plot_radius_buffer
         pointcloud = pointcloud[keep_points]
-    return pointcloud, coord_headers + output_headers
+    return pointcloud, coord_headers+output_headers
 
 
-def save_file(filename, pointcloud, headers=None, silent=False):
-    if headers is None:
-        headers = []
+def save_file(filename, pointcloud, headers_of_interest=None, silent=False):
+    print(headers_of_interest)
+    if headers_of_interest is None:
+        headers_of_interest = []
     if pointcloud.shape[0] == 0:
         print(filename, 'is empty...')
     else:
         if not silent:
             print('Saving file...')
         if filename[-4:] == '.las':
-            las = laspy.create(file_version="1.4", point_format=6)
+            las = laspy.create(file_version="1.4", point_format=7)
             las.header.offsets = np.min(pointcloud[:, :3], axis=0)
             las.header.scales = [0.001, 0.001, 0.001]
 
@@ -112,17 +113,21 @@ def save_file(filename, pointcloud, headers=None, silent=False):
             las.y = pointcloud[:, 1]
             las.z = pointcloud[:, 2]
 
-            if len(headers) != 0:
-                #  The reverse step below just puts the headings in the preferred order. They are backwards without it.
-                headers = headers[3:]  # Trim off X, Y, Z
-                headers.reverse()
-                col_idxs = list(range(3, pointcloud.shape[1]))
-                col_idxs.reverse()
-                for header, i in zip(headers, col_idxs):
-                    column = pointcloud[:, i]
-                    las.add_extra_dim(laspy.ExtraBytesParams(name=header, type="f8"))
-                    setattr(las, header, column)
+            if len(headers_of_interest) != 0:
+                headers_of_interest = headers_of_interest[3:]
 
+                #  The reverse step below just puts the headings in the preferred order. They are backwards without it.
+                col_idxs = list(range(3, pointcloud.shape[1]))
+                headers_of_interest.reverse()
+
+                col_idxs.reverse()
+                for header, i in zip(headers_of_interest, col_idxs):
+                    column = pointcloud[:, i]
+                    if header in ['red', 'green', 'blue']:
+                        setattr(las, header, column)
+                    else:
+                        las.add_extra_dim(laspy.ExtraBytesParams(name=header, type="f8"))
+                        setattr(las, header, column)
             las.write(filename)
             if not silent:
                 print("Saved to:", filename)
@@ -139,9 +144,8 @@ def get_heights_above_DTM(points, DTM):
     return points
 
 
-def clustering(points, eps=0.05, min_samples=2):
-    print("Clustering...")
-    db = DBSCAN(eps=eps, min_samples=min_samples, metric='euclidean', algorithm='kd_tree', n_jobs=-1).fit(points[:, :3])
+def clustering(points, eps=0.05, min_samples=2, n_jobs=1):
+    db = DBSCAN(eps=eps, min_samples=min_samples, metric='euclidean', algorithm='kd_tree', n_jobs=n_jobs).fit(points[:, :3])
     return np.hstack((points, np.atleast_2d(db.labels_).T))
 
 
@@ -160,5 +164,8 @@ def low_resolution_hack_mode(point_cloud, num_iterations):
         point_cloud = subsample_point_cloud(point_cloud, 0.01)
     print('Hacked point cloud shape:', point_cloud.shape)
     return point_cloud
+
 # if __name__=='__main__':
-#     pc, headers = load_file('C:/Users/seank/Downloads/CULS/CULS/plot_1_annotated_FSCT_output/full_cyl_array.las')
+    # pc, headers = load_file('C:/Users/seank/OneDrive - University of Tasmania/2. NDT Project 2020/NSW/Shared/1high s3 single tree.las', headers_of_interest=['red', 'green', 'blue'])
+    # print(headers)
+    # save_file('C:/Users/seank/OneDrive - University of Tasmania/2. NDT Project 2020/NSW/Shared/1high s3 single tree_FSCT_output/1high s3 single tree_5_m_crop_withRGB.las', pc, headers)

@@ -42,12 +42,11 @@ class PostProcessing:
         self.cwd_class_label = parameters['cwd_class']
         self.stem_class_label = parameters['stem_class']
         print("Loading segmented point cloud...")
-        self.point_cloud, self.headers = load_file(self.output_dir+self.filename[:-4] + '_segmented.las', headers_of_interest=['red', 'green', 'blue', 'label'])
-        self.label_index = self.headers.index('label')
-
-        self.point_cloud[:, self.label_index] = self.point_cloud[:, self.label_index] + 1  # index offset since noise_class was removed from inference.
+        self.point_cloud, self.headers_of_interest = load_file(self.output_dir+self.filename[:-4] + '_segmented.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label'])
         self.point_cloud = np.hstack((self.point_cloud, np.zeros((self.point_cloud.shape[0], 1))))  # Add height above DTM column
-        self.headers.append('height_above_DTM')  # Add height_above_DTM to the headers.
+        self.headers_of_interest.append('height_above_DTM')  # Add height_above_DTM to the headers.
+        self.label_index = self.headers_of_interest.index('label')
+        self.point_cloud[:, self.label_index] = self.point_cloud[:, self.label_index] + 1  # index offset since noise_class was removed from inference.
 
     def make_DTM(self, clustering_epsilon=0.3, min_cluster_points=250, smoothing_radius=1, crop_dtm=False):
         print("Making DTM...")
@@ -63,7 +62,7 @@ class PostProcessing:
             self.terrain_points_subsampled = self.terrain_points
 
         # Cluster terrain_points using DBSCAN
-        clustered_terrain_points = clustering(self.terrain_points_subsampled, clustering_epsilon)
+        clustered_terrain_points = clustering(self.terrain_points_subsampled, clustering_epsilon, n_jobs=-1)
         # Initialise terrain and noise cluster arrays
         terrain_clusters = np.zeros((0, self.terrain_points_subsampled.shape[1]))
         self.noise_points = np.zeros((0, self.terrain_points_subsampled.shape[1]))
@@ -114,7 +113,7 @@ class PostProcessing:
                 smoothed_Z = np.vstack((smoothed_Z, np.nanmean(grid_points[i, 2])))
             grid_points[:, 2] = np.squeeze(smoothed_Z)
 
-        grid_points = clustering(grid_points, eps=self.parameters['fine_grid_resolution'] * 3, min_samples=15)
+        grid_points = clustering(grid_points, eps=self.parameters['fine_grid_resolution'] * 3, min_samples=15, n_jobs=-1)
 
         rejected_grid_points = grid_points[grid_points[:, -1] != 0, :-1]
         grid_points = grid_points[grid_points[:, -1] >= 0, :-1]
@@ -137,39 +136,40 @@ class PostProcessing:
         self.plot_area_estimate = self.convexhull.volume  # volume is area in 2d...
         print("Plot area is approximately", self.plot_area_estimate, "m^2 or", self.plot_area_estimate / 10000, 'ha')
 
+        self.point_cloud = get_heights_above_DTM(self.point_cloud, self.DTM)  # Add a height above DTM column to the point clouds.
+        self.terrain_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.terrain_class_label]  # -2 is now the class label as we added the height above DTM column.
+        self.terrain_points_rejected = np.vstack((self.terrain_points[self.terrain_points[:, -1] <= -0.1],
+                                                  self.terrain_points[self.terrain_points[:, -1] > 0.1]))
+        self.terrain_points = self.terrain_points[np.logical_and(self.terrain_points[:, -1] > -0.2, self.terrain_points[:, -1] < 0.2)]
+
+        save_file(self.output_dir + 'terrain_points.las', self.terrain_points, headers_of_interest=self.headers_of_interest, silent=False)
+        self.stem_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.stem_class_label]
+        self.terrain_points = np.vstack((self.terrain_points, self.stem_points[np.logical_and(self.stem_points[:, -1] >= -0.05, self.stem_points[:, -1] <= 0.05)]))
+        self.stem_points_rejected = self.stem_points[self.stem_points[:, -1] <= 0.05]
+        self.stem_points = self.stem_points[self.stem_points[:, -1] > 0.05]
+        save_file(self.output_dir + 'stem_points.las', self.stem_points, headers_of_interest=self.headers_of_interest, silent=False)
+
+        self.vegetation_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.vegetation_class_label]
+        self.terrain_points = np.vstack((self.terrain_points, self.vegetation_points[np.logical_and(self.vegetation_points[:, -1] >= -0.05, self.vegetation_points[:, -1] <= 0.05)]))
+        self.vegetation_points_rejected = self.vegetation_points[self.vegetation_points[:, -1] <= 0.05]
+        self.vegetation_points = self.vegetation_points[self.vegetation_points[:, -1] > 0.05]
+        save_file(self.output_dir + 'vegetation_points.las', self.vegetation_points, headers_of_interest=self.headers_of_interest, silent=False)
+
+        self.cwd_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.cwd_class_label]  # -2 is now the class label as we added the height above DTM column.
+        self.terrain_points = np.vstack((self.terrain_points, self.cwd_points[np.logical_and(self.cwd_points[:, -1] >= -0.05, self.cwd_points[:, -1] <= 0.05)]))
+
+        self.cwd_points_rejected = np.vstack((self.cwd_points[self.cwd_points[:, -1] <= 0.05], self.cwd_points[self.cwd_points[:, -1] >= 10]))
+        self.cwd_points = self.cwd_points[np.logical_and(self.cwd_points[:, -1] > 0.05, self.cwd_points[:, -1] < 3)]
+        save_file(self.output_dir + 'cwd_points.las', self.cwd_points, headers_of_interest=self.headers_of_interest, silent=False)
+
+        self.terrain_points[:, self.label_index] = self.terrain_class_label
+        self.cleaned_pc = np.vstack((self.terrain_points, self.vegetation_points, self.cwd_points, self.stem_points))
+        save_file(self.output_dir + self.filename[:-4] + '_segmented_cleaned.las', self.cleaned_pc, headers_of_interest=self.headers_of_interest)
+
+        times = pd.read_csv(self.output_dir + 'run_times.csv', index_col=None)
         self.post_processing_time_end = time.time()
         self.post_processing_time = self.post_processing_time_end - self.post_processing_time_start
         print("Post-processing took", self.post_processing_time, 'seconds')
-
-        self.point_cloud = get_heights_above_DTM(self.point_cloud, self.DTM)  # Add a height above DTM column to the point clouds.
-        self.terrain_points = self.point_cloud[self.point_cloud[:, -2] == self.terrain_class_label]  # -2 is now the class label as we added the height above DTM column.
-        self.terrain_points_rejected = np.vstack((self.terrain_points[self.terrain_points[:, -1] <= -0.1],
-                                                  self.terrain_points[self.terrain_points[:, -1] > 0.1]))
-        self.terrain_points = self.terrain_points[np.logical_and(self.terrain_points[:, -1] > -0.1, self.terrain_points[:, -1] < 0.1)]
-
-        save_file(self.output_dir + 'terrain_points.las', self.terrain_points, silent=True)
-        self.stem_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.stem_class_label]
-
-        self.stem_points_rejected = self.stem_points[self.stem_points[:, -1] <= 0.05]
-        self.stem_points = self.stem_points[self.stem_points[:, -1] > 0.05]
-        save_file(self.output_dir + 'stem_points.las', self.stem_points, silent=True)
-
-        self.vegetation_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.vegetation_class_label]
-        self.vegetation_points_rejected = self.vegetation_points[self.vegetation_points[:, -1] <= 0.05]
-        self.vegetation_points = self.vegetation_points[self.vegetation_points[:, -1] > 0.05]
-        save_file(self.output_dir + 'vegetation_points.las', self.vegetation_points, silent=True)
-
-        self.cwd_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.cwd_class_label]  # -2 is now the class label as we added the height above DTM column.
-        self.cwd_points_rejected = np.vstack(
-                (self.cwd_points[self.cwd_points[:, -1] <= 0.05], self.cwd_points[self.cwd_points[:, -1] >= 10]))
-        self.cwd_points = self.cwd_points[np.logical_and(self.cwd_points[:, -1] > 0.05, self.cwd_points[:, -1] < 3)]
-        save_file(self.output_dir + 'cwd_points.las', self.cwd_points, silent=True)
-
-        self.cleaned_pc = np.vstack((self.terrain_points, self.vegetation_points, self.cwd_points, self.stem_points))
-        save_file(self.output_dir + self.filename[:-4] + '_segmented_cleaned.las', self.cleaned_pc, self.headers)
-
-        times = pd.read_csv(self.output_dir + 'run_times.csv', index_col=None)
         times['Post_processing_time (s)'] = self.post_processing_time
         times.to_csv(self.output_dir + 'run_times.csv', index=False)
-        print("Post processing took", self.post_processing_time, 's')
         print("Post processing done.")

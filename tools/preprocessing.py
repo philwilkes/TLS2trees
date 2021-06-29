@@ -30,13 +30,16 @@ class Preprocessing:
 
         self.output_dir, self.working_dir = make_folder_structure(self.directory + self.filename)
 
-        self.point_cloud, headers = load_file(self.directory + self.filename,
-                                              self.parameters['plot_centre'],
-                                              self.parameters['plot_radius'])
+        self.point_cloud, headers = load_file(filename=self.directory + self.filename,
+                                              plot_centre=self.parameters['plot_centre'],
+                                              plot_radius=self.parameters['plot_radius'],
+                                              plot_radius_buffer=self.parameters['plot_radius_buffer'],
+                                              headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'],
+                                              output_directory=self.output_dir)
 
         if self.parameters['plot_radius'] != 0:
             save_file(self.output_dir + self.filename[:-4] + '_' + str(self.parameters['plot_radius']) + '_m_crop.las',
-                      self.point_cloud)
+                      self.point_cloud, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
 
         self.point_cloud = self.point_cloud[:, :3]  # Trims off unneeded dimensions if present.
 
@@ -98,7 +101,7 @@ class Preprocessing:
         num_boxes_x = int(np.ceil(X_range / self.box_dimensions[0]))
         num_boxes_y = int(np.ceil(Y_range / self.box_dimensions[1]))
         num_boxes_z = int(np.ceil(Z_range / self.box_dimensions[2]))
-        print(self.box_overlap)
+
         x_vals = np.linspace(Xmin, Xmin + (num_boxes_x * self.box_dimensions[0]),
                              int(num_boxes_x / (1 - self.box_overlap[0])) + 1)
         y_vals = np.linspace(Ymin, Ymin + (num_boxes_y * self.box_dimensions[1]),

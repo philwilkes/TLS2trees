@@ -15,6 +15,6 @@ other_parameters = dict(directory='../',
                         fine_grid_resolution=0.5,
                         num_neighbours=3,
                         Canopy_coverage_resolution=1.0,
-                        run_from_start=0,
+                        run_from_start=1,
                         delete_working_directory=0,
                         )

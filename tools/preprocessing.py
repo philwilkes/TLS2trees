@@ -11,6 +11,7 @@ from sklearn.neighbors import NearestNeighbors
 import threading
 from tools import load_file, save_file, make_folder_structure, subsample_point_cloud, low_resolution_hack_mode
 import os
+from multiprocessing import get_context
 
 
 class Preprocessing:
@@ -110,8 +111,8 @@ class Preprocessing:
                              int(num_boxes_z / (1 - self.box_overlap[2])) + 1)
 
         box_centres = np.vstack(np.meshgrid(x_vals, y_vals, z_vals)).reshape(3, -1).T
-        point_divisions = []
 
+        point_divisions = []
         for thread in range(self.num_procs):
             point_divisions.append([])
 

@@ -61,18 +61,21 @@ if __name__ == '__main__':
 
         parameters.update(other_parameters)
 
-        preprocessing = Preprocessing(parameters)
-        preprocessing.preprocess_point_cloud()
-        del preprocessing
+        # preprocessing = Preprocessing(parameters)
+        # preprocessing.preprocess_point_cloud()
+        # del preprocessing
+        #
+        # sem_seg = SemanticSegmentation(parameters)
+        # sem_seg.inference()
+        # del sem_seg
 
-        sem_seg = SemanticSegmentation(parameters)
-        sem_seg.inference()
-        del sem_seg
-
-        # object_1 = PostProcessing(parameters)
-        # object_1.process_point_cloud()
-        # del object_1
+        object_1 = PostProcessing(parameters)
+        object_1.process_point_cloud()
+        del object_1
         #
         # measure1 = MeasureTree(parameters)
         # measure1.run_measurement_extraction()
         # del measure1
+
+
+

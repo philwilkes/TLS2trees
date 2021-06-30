@@ -16,3 +16,5 @@ sklearn~=0.0
 scikit-learn~=0.23.2
 future~=0.18.2
 laspy~=2.0.1
+mdutils~=1.3.0
+markdown~=3.3.4

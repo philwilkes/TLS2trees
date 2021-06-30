@@ -34,7 +34,7 @@ class PostProcessing:
         self.output_dir = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/' + self.filename.split('/')[-1][:-4] + '_FSCT_output/'
         self.filename = self.filename.split('/')[-1]
         if self.parameters['plot_radius'] != 0:
-            self.filename = self.filename[:-4] + '_' + str(self.parameters['plot_radius']) + '_m_crop.las'
+            self.filename = self.filename[:-4] + '_' + str(self.parameters['plot_radius'] + self.parameters['plot_radius_buffer']) + '_m_crop.las'
 
         self.noise_class_label = parameters['noise_class']
         self.terrain_class_label = parameters['terrain_class']

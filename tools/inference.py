@@ -72,7 +72,7 @@ class SemanticSegmentation:
         self.working_dir = self.directory + self.filename[:-4] + '_FSCT_output/working_directory/'
 
         if self.parameters['plot_radius'] != 0:
-            self.filename = self.filename[:-4] + '_' + str(self.parameters['plot_radius']) + '_m_crop.las'
+            self.filename = self.filename[:-4] + '_' + str(self.parameters['plot_radius'] + self.parameters['plot_radius_buffer']) + '_m_crop.las'
             self.directory = self.output_dir
 
     def inference(self):

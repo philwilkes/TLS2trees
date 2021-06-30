@@ -39,7 +39,7 @@ class Preprocessing:
                                               output_directory=self.output_dir)
 
         if self.parameters['plot_radius'] != 0:
-            save_file(self.output_dir + self.filename[:-4] + '_' + str(self.parameters['plot_radius']) + '_m_crop.las',
+            save_file(self.output_dir + self.filename[:-4] + '_' + str(self.parameters['plot_radius']+self.parameters['plot_radius_buffer']) + '_m_crop.las',
                       self.point_cloud, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
 
         self.point_cloud = self.point_cloud[:, :3]  # Trims off unneeded dimensions if present.

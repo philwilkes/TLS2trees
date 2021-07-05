@@ -58,6 +58,7 @@ def subsample_point_cloud(X, min_spacing):
         X_check = X_check[np.logical_and(i1, i2)]
     # X = np.delete(X,np.unique(indices[distances[:,1]<min_spacing]),axis=0)
     X = X_keep
+    print('Done.')
     return X
 
 

@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+from numba import jit
+import time
 
 
 def create_3d_circles_as_points_flat(x, y, z, r, circle_points=15):
@@ -13,14 +15,32 @@ def create_3d_circles_as_points_flat(x, y, z, r, circle_points=15):
     return points
 
 
-circle_array = np.vstack((np.random.uniform(0.05, 5, size=(10, 1)), np.random.uniform(0.05, 5, size=(10, 1)), np.random.uniform(0.05, 5, size=(10, 1))))
+def make_circles(circlearray):
+    for i in circlearray:
+        create_3d_circles_as_points_flat(i[0], i[1], i[2], i[3])
 
 
+jit_create_3d_circles_as_points_flat = jit()(create_3d_circles_as_points_flat)
 
-print(circle_array)
+
+def make_circles2(circlearray):
+    for i in circlearray:
+        jit_create_3d_circles_as_points_flat(i[0], i[1], i[2], i[3])
 
 
-"""
-Idea
-Want AI to predict circle radius and centre from 2D points.
-"""
+jit_make_circles = jit()(make_circles2)
+
+circle_array = np.hstack((np.random.uniform(0.05, 5, size=(10000, 1)), np.random.uniform(0.05, 5, size=(10000, 1)), np.random.uniform(0.05, 5, size=(10000, 1)), np.random.uniform(0.1, 2, size=(10000, 1))))
+
+t1 = time.time()
+make_circles(circle_array)
+print('T1', time.time() - t1)
+
+t1 = time.time()
+jit_make_circles(circle_array)
+print('T1', time.time() - t1)
+
+t1 = time.time()
+jit_make_circles(circle_array)
+print('T1', time.time() - t1)
+

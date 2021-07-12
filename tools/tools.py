@@ -10,6 +10,9 @@ import shutil
 from sklearn.cluster import DBSCAN
 from scipy.interpolate import griddata
 from copy import deepcopy
+import hdbscan
+from multiprocessing import get_context
+from scipy import spatial
 
 
 def make_folder_structure(filename):
@@ -31,17 +34,8 @@ def make_folder_structure(filename):
     return output_dir, working_dir
 
 
-def subsample_point_cloud(X, min_spacing):
-    """
-
-    Args:
-        X: The input point cloud.
-        min_spacing: The minimum allowable distance between two points in the point cloud.
-
-    Returns:
-        X: The subsampled point cloud.
-    """
-    print("Subsampling...")
+def subsample(args):
+    X, min_spacing = args
     neighbours = NearestNeighbors(n_neighbors=2, algorithm='kd_tree', metric='euclidean').fit(X[:, :3])
     distances, indices = neighbours.kneighbors(X[:, :3])
     X_keep = X[distances[:, 1] >= min_spacing]
@@ -56,13 +50,52 @@ def subsample_point_cloud(X, min_spacing):
         i1 = [distances[:, 1] < min_spacing][0]
         i2 = [X_check[indices[:, 0], 2] < X_check[indices[:, 1], 2]][0]
         X_check = X_check[np.logical_and(i1, i2)]
-    # X = np.delete(X,np.unique(indices[distances[:,1]<min_spacing]),axis=0)
-    X = X_keep
-    print('Done.')
-    return X
+    return X_keep
 
 
-def load_file(filename, plot_centre=None, plot_radius=0, plot_radius_buffer=0, silent=False, headers_of_interest=None, output_directory=None):
+def subsample_point_cloud(pointcloud, min_spacing, num_procs=1):
+    """
+    Args:
+        pointcloud: The input point cloud.
+        min_spacing: The minimum allowable distance between two points in the point cloud.
+        num_procs: Number of threads to use when subsampling.
+
+    Returns:
+        pointcloud: The subsampled point cloud.
+    """
+    print("Subsampling...")
+    print("Original number of points:", pointcloud.shape[0])
+
+    if num_procs > 1:
+        num_slices = num_procs
+        Xmin = np.min(pointcloud[:, 0])
+        Xmax = np.max(pointcloud[:, 0])
+        Xrange = Xmax - Xmin
+        slice_list = []
+        kdtree = spatial.cKDTree(np.atleast_2d(pointcloud[:, 0]).T, leafsize=10000)
+        for i in range(num_slices):
+            min_bound = Xmin + i*(Xrange/num_slices)
+            results = kdtree.query_ball_point(np.array([min_bound]), r=Xrange/num_slices)
+            # mask = np.logical_and(pointcloud[:, 0] >= min_bound, pointcloud[:, 0] < max_bound)
+            pc_slice = pointcloud[results]
+            print("Slice size:", pc_slice.shape[0], '    Slice number:', i+1, '/', num_slices)
+            slice_list.append([pc_slice, min_spacing])
+
+        pointcloud = np.zeros((0, pointcloud.shape[1]))
+        with get_context("spawn").Pool(processes=num_procs) as pool:
+            for i in pool.imap_unordered(subsample, slice_list):
+                pointcloud = np.vstack((pointcloud, i))
+
+    else:
+        pointcloud = subsample([pointcloud, min_spacing])
+
+    print("Subsampled number of points:", pointcloud.shape[0])
+    return pointcloud
+
+
+def load_file(filename, plot_centre=None, plot_radius=0, plot_radius_buffer=0, silent=False, headers_of_interest=None, return_num_points=False):
+    output_dir = os.path.dirname(os.path.realpath(filename)).replace('\\', '/') + '/' + filename.split('/')[-1][:-4] + '_FSCT_output/'
+
     if headers_of_interest is None:
         headers_of_interest = []
     if not silent:
@@ -86,14 +119,19 @@ def load_file(filename, plot_centre=None, plot_radius=0, plot_radius_buffer=0, s
     elif file_extension == '.csv':
         pointcloud = np.array(pd.read_csv(filename, header=None, index_col=None, delim_whitespace=True))
 
-    if plot_centre is None and plot_radius > 0:
+    original_num_points = pointcloud.shape[0]
+
+    if plot_centre is None:
         plot_centre = np.mean(pointcloud[:, :2], axis=0)
-        if output_directory is not None:
-            np.savetxt(output_directory + 'plot_centre_coords.csv', plot_centre)
+
+    if plot_radius > 0:
         distances = np.linalg.norm(pointcloud[:, :2] - plot_centre, axis=1)
         keep_points = distances < plot_radius + plot_radius_buffer
         pointcloud = pointcloud[keep_points]
-    return pointcloud, coord_headers+output_headers
+    if return_num_points:
+        return pointcloud, coord_headers + output_headers, original_num_points
+    else:
+        return pointcloud, coord_headers + output_headers
 
 
 def save_file(filename, pointcloud, headers_of_interest=None, silent=False):
@@ -145,12 +183,21 @@ def get_heights_above_DTM(points, DTM):
     return points
 
 
-def clustering(points, eps=0.05, min_samples=2, n_jobs=1):
-    db = DBSCAN(eps=eps, min_samples=min_samples, metric='euclidean', algorithm='kd_tree', n_jobs=n_jobs).fit(points[:, :3])
-    return np.hstack((points, np.atleast_2d(db.labels_).T))
+def clustering(points, eps=0.05, min_samples=2, n_jobs=1, mode='DBSCAN'):
+    print("Clustering")
+    assert mode == 'DBSCAN' or mode == 'HDBSCAN'
+
+    if mode == 'HDBSCAN':
+        cluster_labels = hdbscan.HDBSCAN(min_cluster_size=100).fit_predict(points[:, :3])
+        return np.hstack((points, np.atleast_2d(cluster_labels).T))
+
+    elif mode == 'DBSCAN':
+        db = DBSCAN(eps=eps, min_samples=min_samples, metric='euclidean', algorithm='kd_tree', n_jobs=n_jobs).fit(points[:, :3])
+
+        return np.hstack((points, np.atleast_2d(db.labels_).T))
 
 
-def low_resolution_hack_mode(point_cloud, num_iterations):
+def low_resolution_hack_mode(point_cloud, num_iterations, min_spacing, num_procs):
     print('Using low resolution point cloud hack mode...')
     print('Original point cloud shape:', point_cloud.shape)
     point_cloud_original = deepcopy(point_cloud)
@@ -162,11 +209,6 @@ def low_resolution_hack_mode(point_cloud, num_iterations):
                  np.random.normal(-0.025, 0.025, size=(duplicated.shape[0], 1)),
                  np.random.normal(-0.025, 0.025, size=(duplicated.shape[0], 1))))
         point_cloud = np.vstack((point_cloud, duplicated))
-        point_cloud = subsample_point_cloud(point_cloud, 0.01)
+        point_cloud = subsample_point_cloud(point_cloud, min_spacing, num_procs)
     print('Hacked point cloud shape:', point_cloud.shape)
     return point_cloud
-
-# if __name__=='__main__':
-    # pc, headers = load_file('C:/Users/seank/OneDrive - University of Tasmania/2. NDT Project 2020/NSW/Shared/1high s3 single tree.las', headers_of_interest=['red', 'green', 'blue'])
-    # print(headers)
-    # save_file('C:/Users/seank/OneDrive - University of Tasmania/2. NDT Project 2020/NSW/Shared/1high s3 single tree_FSCT_output/1high s3 single tree_5_m_crop_withRGB.las', pc, headers)

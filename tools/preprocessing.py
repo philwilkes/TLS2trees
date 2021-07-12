@@ -25,27 +25,45 @@ class Preprocessing:
         self.box_overlap = np.array(self.parameters['box_overlap'])
         self.min_points_per_box = self.parameters['min_points_per_box']
         self.max_points_per_box = self.parameters['max_points_per_box']
-        self.subsample = self.parameters['subsample']
-        self.subsampling_min_spacing = self.parameters['subsampling_min_spacing']
         self.num_procs = parameters['num_procs']
 
         self.output_dir, self.working_dir = make_folder_structure(self.directory + self.filename)
 
-        self.point_cloud, headers = load_file(filename=self.directory + self.filename,
-                                              plot_centre=self.parameters['plot_centre'],
-                                              plot_radius=self.parameters['plot_radius'],
-                                              plot_radius_buffer=self.parameters['plot_radius_buffer'],
-                                              headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'],
-                                              output_directory=self.output_dir)
+        self.point_cloud, headers, self.num_points_orig = load_file(filename=self.directory + self.filename,
+                                                                    plot_centre=self.parameters['plot_centre'],
+                                                                    plot_radius=self.parameters['plot_radius'],
+                                                                    plot_radius_buffer=self.parameters['plot_radius_buffer'],
+                                                                    headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'],
+                                                                    return_num_points=True)
+
+        self.num_points_trimmed = self.point_cloud.shape[0]
+
+        if self.parameters['plot_centre'] is None:
+            mins = np.min(self.point_cloud[:, :2], axis=0)
+            maxes = np.min(self.point_cloud[:, :2], axis=0)
+            ranges = maxes - mins
+            self.parameters['plot_centre'] = mins + ranges/2
+
+        np.savetxt(self.output_dir + 'plot_centre_coords.csv', self.parameters['plot_centre'])
+
+        if self.parameters['subsample']:
+            self.point_cloud = subsample_point_cloud(self.point_cloud, self.parameters['subsampling_min_spacing'], self.num_procs)
+
+        self.num_points_subsampled = self.point_cloud.shape[0]
 
         if self.parameters['plot_radius'] != 0:
             save_file(self.output_dir + self.filename[:-4] + '_' + str(self.parameters['plot_radius']+self.parameters['plot_radius_buffer']) + '_m_crop.las',
                       self.point_cloud, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
 
+
         self.point_cloud = self.point_cloud[:, :3]  # Trims off unneeded dimensions if present.
 
         if self.parameters['low_resolution_point_cloud_hack_mode']:
-            self.point_cloud = low_resolution_hack_mode(self.point_cloud, self.parameters['low_resolution_point_cloud_hack_mode'])
+            self.point_cloud = low_resolution_hack_mode(self.point_cloud,
+                                                        self.parameters['low_resolution_point_cloud_hack_mode'],
+                                                        self.parameters['subsampling_min_spacing'],
+                                                        self.parameters['num_procs'])
+
             save_file(self.output_dir + self.filename[:-4] + '_hack_mode_cloud.las', self.point_cloud)
 
         self.global_shift = [np.mean(self.point_cloud[:, 0]), np.mean(self.point_cloud[:, 1]),
@@ -150,9 +168,68 @@ class Preprocessing:
         self.preprocessing_time_end = time.time()
         self.preprocessing_time_total = self.preprocessing_time_end - self.preprocessing_time_start
         print("Preprocessing took", self.preprocessing_time_total, 's')
-        times = pd.DataFrame(np.array([[self.preprocessing_time_total, 0, 0, 0]]), columns=['Preprocessing_Time (s)',
-                                                                                            'Semantic_Segmentation_Time (s)',
-                                                                                            'Post_processing_time (s)',
-                                                                                            'Measurement Time (s)'])
-        times.to_csv(self.output_dir + 'run_times.csv', index=False)
+        processing_report_headers = ['Site',
+                                     'PlotID',
+                                     'Point Cloud Filename',
+                                     'Plot Centre Northing',
+                                     'Plot Centre Easting',
+                                     'UTM Zone',
+                                     'Hemisphere',
+                                     'Plot Radius',
+                                     'Plot Radius Buffer',
+                                     'Plot Area',
+                                     'Num Trees in Plot',
+                                     'Stems/ha',
+                                     'Mean DBH',
+                                     'Median DBH',
+                                     'Min DBH',
+                                     'Max DBH',
+                                     'Mean Height',
+                                     'Median Height',
+                                     'Min Height',
+                                     'Max Height',
+                                     'Mean Volume',
+                                     'Median Volume',
+                                     'Min Volume',
+                                     'Max Volume',
+                                     'Avg Gradient',
+                                     'Avg Gradient North',
+                                     'Avg Gradient East',
+                                     'Canopy Gap Fraction',
+                                     'Understory Veg Coverage Fraction',
+                                     'CWD Coverage Fraction',
+                                     'Num Points Original PC',
+                                     'Num Points Trimmed PC',
+                                     'Num Points Subsampled PC',
+                                     'Num Terrain Points',
+                                     'Num Vegetation Points',
+                                     'Num CWD Points',
+                                     'Num Stem Points',
+                                     'Preprocessing Time (s)',
+                                     'Semantic Segmentation Time (s)',
+                                     'Post processing time (s)',
+                                     'Measurement Time (s)']
+
+        processing_report = pd.DataFrame(np.zeros((1, len(processing_report_headers))), columns=processing_report_headers)
+
+        processing_report['Preprocessing Time (s)'] = self.preprocessing_time_total
+        processing_report['Site'] = self.parameters['Site']
+        processing_report['PlotID'] = self.parameters['PlotID']
+        processing_report['Point Cloud Filename'] = self.parameters['input_point_cloud']
+        processing_report['Plot Centre Northing'] = self.parameters['plot_centre'][0]
+        processing_report['Plot Centre Easting'] = self.parameters['plot_centre'][1]
+        processing_report['UTM Zone'] = str(self.parameters['UTM_zone_number']) + str(self.parameters['UTM_zone_letter'])
+
+        if self.parameters['UTM_is_north']:
+            processing_report['Hemisphere'] = 'North'
+        else:
+            processing_report['Hemisphere'] = 'South'
+
+        processing_report['Plot Radius'] = self.parameters['plot_radius']
+        processing_report['Plot Radius Buffer'] = self.parameters['plot_radius_buffer']
+        processing_report['Num Points Original PC'] = self.num_points_orig
+        processing_report['Num Points Trimmed PC'] = self.num_points_trimmed
+        processing_report['Num Points Subsampled PC'] = self.num_points_subsampled
+
+        processing_report.to_csv(self.output_dir + 'processing_report.csv', index=False)
         print("Preprocessing done\n")

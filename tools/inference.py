@@ -13,6 +13,8 @@ import os
 import time
 from tools import load_file, save_file
 import shutil
+import sys
+sys.setrecursionlimit(10 ** 8)  # Can be necessary for dealing with large point clouds.
 
 
 class TestingDataset(Dataset, ABC):
@@ -113,19 +115,15 @@ class SemanticSegmentation:
         original_point_cloud, headers = load_file(self.directory + self.filename, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
         original_point_cloud[:, :3] = original_point_cloud[:, :3] - global_shift
 
-        if self.parameters['subsample']:
-            original_point_cloud = subsample_point_cloud(original_point_cloud,
-                                                         self.parameters['subsampling_min_spacing'])
-
         self.output = np.asarray(choose_most_confident_label(self.output_point_cloud, original_point_cloud), dtype='float64')
         self.output[:, :3] = self.output[:, :3] + global_shift
         save_file(self.output_dir + self.filename[:-4] + '_segmented.las', self.output, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label'])
 
         self.sem_seg_end_time = time.time()
         self.sem_seg_total_time = self.sem_seg_end_time - self.sem_seg_start_time
-        times = pd.read_csv(self.output_dir + 'run_times.csv', index_col=None)
-        times['Semantic_Segmentation_Time (s)'] = self.sem_seg_total_time
-        times.to_csv(self.output_dir + 'run_times.csv', index=False)
+        processing_report = pd.read_csv(self.output_dir + 'processing_report.csv', index_col=None)
+        processing_report['Semantic Segmentation Time (s)'] = self.sem_seg_total_time
+        processing_report.to_csv(self.output_dir + 'processing_report.csv', index=False)
         print("Semantic segmentation took", self.sem_seg_total_time, 's')
         print("Semantic segmentation done")
         if self.parameters['delete_working_directory']:

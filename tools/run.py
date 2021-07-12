@@ -37,36 +37,36 @@ if __name__ == '__main__':
 
     # point_clouds_to_process = ["C:/Users/seank/Downloads/CULS/CULS/plot_1_annotated.las"]
     point_clouds_to_process = [
-                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Leach P111.las',
-                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Leach P61.las',
-                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Denham P264.las',
-                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Denham P257.las',
-                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Leach_P111_TLS.las',
-                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Leach_P61_TLS.las',
-                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Denham_P264_TLS.las',
-                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Denham_P257_TLS.las',
-                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Fleas P1.las',
-                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Fleas P2.las',
-                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Fleas P3.las',
+                               'C:/Users/seank/Documents/NDT Project/Western Australia/Leach P111.las',
+                               'C:/Users/seank/Documents/NDT Project/Western Australia/Leach P61.las',
+                               'C:/Users/seank/Documents/NDT Project/Western Australia/Denham P264.las',
+                               'C:/Users/seank/Documents/NDT Project/Western Australia/Denham P257.las',
+                               'C:/Users/seank/Documents/NDT Project/Western Australia/Leach_P111_TLS.las',
+                               'C:/Users/seank/Documents/NDT Project/Western Australia/Leach_P61_TLS.las',
+                               'C:/Users/seank/Documents/NDT Project/Western Australia/Denham_P264_TLS.las',
+                               'C:/Users/seank/Documents/NDT Project/Western Australia/Denham_P257_TLS.las',
+                               'C:/Users/seank/Documents/NDT Project/Western Australia/Fleas P1.las',
+                               'C:/Users/seank/Documents/NDT Project/Western Australia/Fleas P2.las',
+                               'C:/Users/seank/Documents/NDT Project/Western Australia/Fleas P3.las',
 
                                # NSW
                                # 'C:/Users/seank/Documents/NDT Project/New South Wales/Site1Plot1.las',
                                # 'C:/Users/seank/Documents/NDT Project/New South Wales/Site1Plot2.las',
                                # 'C:/Users/seank/Documents/NDT Project/New South Wales/Site2Plot1.las',
-                               'C:/Users/seank/Documents/NDT Project/New South Wales/Site3SingleTree.las',
+                               # 'C:/Users/seank/Documents/NDT Project/New South Wales/Site3SingleTree.las',
 
                                ]
     plot_centres = [
-                    # [445915.24, 6314467.17],
-                    # [445949.37, 6314325.78],
-                    # [417213.82, 6335818.69],
-                    # [417596.50, 6335782.84],
-                    # [445913.42, 6314465.786],
-                    # [445948.35, 6314325.54],
-                    # [417212.755, 6335817.434],
-                    # [417595.946, 6335779.279],
-                    # None,
-                    # None,
+                    [445915.24, 6314467.17],
+                    [445949.37, 6314325.78],
+                    [417213.82, 6335818.69],
+                    [417596.50, 6335782.84],
+                    [445913.42, 6314465.786],
+                    [445948.35, 6314325.54],
+                    [417212.755, 6335817.434],
+                    [417595.946, 6335779.279],
+                    None,
+                    None,
                     None,
 
                     # NSW
@@ -83,7 +83,7 @@ if __name__ == '__main__':
 
         parameters = dict(input_point_cloud=point_cloud,
                           batch_size=18,  # If you get CUDA errors, lower this. This is suitable for 24 GB of vRAM.
-                          num_procs=20,  # Number of CPU cores you want to use.
+                          num_procs=10,  # Number of CPU cores you want to use.
                           max_diameter=5,  # Maximum diameter setting. Any measurements greater than this are considered erroneous and are ignored.
                           slice_thickness=0.2,  # default = 0.2
                           slice_increment=0.05,  # default = 0.05
@@ -98,7 +98,7 @@ if __name__ == '__main__':
                           Site='',  # Enter the site name if you wish. Only used for report generation.
                           PlotID='',  # Enter the plot name/ID if you wish. Only used for report generation.
                           plot_centre=plot_centre,  # [X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the median XY coords of the point cloud.
-                          plot_radius=0,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
+                          plot_radius=20,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
                           plot_radius_buffer=3,  # See README.md  This is used for "Intelligent Plot Cropping Mode".
                           UTM_zone_number=50,  # Self explanatory.
                           UTM_zone_letter='',  # Self explanatory.
@@ -107,27 +107,27 @@ if __name__ == '__main__':
                           low_resolution_point_cloud_hack_mode=0)  # See README.md for details. Dodgy hack that can be useful on low resolution point clouds. Approximately multiplies the number of points in the point cloud by this number.
 
         parameters.update(other_parameters)
-        # try:
-        # preprocessing = Preprocessing(parameters)
-        # preprocessing.preprocess_point_cloud()
-        # del preprocessing
-        #
-        # sem_seg = SemanticSegmentation(parameters)
-        # sem_seg.inference()
-        # del sem_seg
-        #
-        # object_1 = PostProcessing(parameters)
-        # object_1.process_point_cloud()
-        # del object_1
+        try:
+            preprocessing = Preprocessing(parameters)
+            preprocessing.preprocess_point_cloud()
+            del preprocessing
 
-        # measure1 = MeasureTree(parameters)
-        # measure1.run_measurement_extraction()
-        # del measure1
-        #
-        ReportWriter(parameters)
+            sem_seg = SemanticSegmentation(parameters)
+            sem_seg.inference()
+            del sem_seg
 
-        # except:
-        #     None
+            object_1 = PostProcessing(parameters)
+            object_1.process_point_cloud()
+            del object_1
+
+            measure1 = MeasureTree(parameters)
+            measure1.run_measurement_extraction()
+            del measure1
+
+            ReportWriter(parameters)
+
+        except:
+            None
 
         #
         #     # creating/opening a file

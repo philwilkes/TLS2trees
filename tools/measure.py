@@ -22,6 +22,7 @@ from tools import load_file, save_file, low_resolution_hack_mode, subsample_poin
 import time
 import hdbscan
 from skspatial.objects import Plane
+import warnings
 
 
 class MeasureTree:
@@ -562,14 +563,16 @@ class MeasureTree:
             max_j = len(input_data)
             clusteroutputlist = []
             skeletonoutputlist = []
-            with get_context("spawn").Pool(processes=self.num_procs) as pool:
-                for i in pool.imap_unordered(MeasureTree.slice_clustering, input_data):
-                    if j % 100 == 0:
-                        print('\r', j, '/', max_j, end='')
-                    j += 1
-                    cluster, skel = i
-                    clusteroutputlist.append(cluster)
-                    skeletonoutputlist.append(skel)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                with get_context("spawn").Pool(processes=self.num_procs) as pool:
+                    for i in pool.imap_unordered(MeasureTree.slice_clustering, input_data):
+                        if j % 100 == 0:
+                            print('\r', j, '/', max_j, end='')
+                        j += 1
+                        cluster, skel = i
+                        clusteroutputlist.append(cluster)
+                        skeletonoutputlist.append(skel)
             print('\r', max_j, '/', max_j, end='')
             print('\nDone\n')
             skeleton_array = np.vstack(skeletonoutputlist)
@@ -854,7 +857,7 @@ class MeasureTree:
             self.vegetation_points = self.vegetation_points[self.vegetation_points[:, self.veg_dict['height_above_dtm']] > self.parameters['ground_veg_cutoff_height']]
 
             self.subsampled_sorted_veg = np.zeros((0, self.vegetation_points.shape[1]))
-            self.vegetation_points_subsampled = subsample_point_cloud(self.vegetation_points, min_spacing=0.1)
+            self.vegetation_points_subsampled = subsample_point_cloud(self.vegetation_points, min_spacing=0.1, num_procs=self.parameters['num_procs'])
             stem_kdtree = spatial.cKDTree(cleaned_cyls[:, :2], leafsize=1000)
             results = stem_kdtree.query_ball_point(self.vegetation_points_subsampled[:, :2], r=self.parameters['veg_sorting_range'])
             i = 0
@@ -891,8 +894,8 @@ class MeasureTree:
             print(u, counts)
             print(np.max(self.subsampled_sorted_veg[:, :3], axis=0))
             print(np.min(self.subsampled_sorted_veg[:, :3], axis=0))
-            save_file(self.output_dir + 'assigned_vegetation_points.las', self.assigned_vegetation_points, headers_of_interest=list(self.veg_dict))
-            save_file(self.output_dir + 'unassigned_vegetation_points.las', self.unassigned_vegetation_points, headers_of_interest=list(self.veg_dict))
+            # save_file(self.output_dir + 'assigned_vegetation_points.las', self.assigned_vegetation_points, headers_of_interest=list(self.veg_dict))
+            # save_file(self.output_dir + 'unassigned_vegetation_points.las', self.unassigned_vegetation_points, headers_of_interest=list(self.veg_dict))
             print("Done vegetation points...")
 
             save_file(self.output_dir + 'ground_veg.las', self.ground_veg, headers_of_interest=list(self.veg_dict))

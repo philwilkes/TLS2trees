@@ -135,7 +135,6 @@ def load_file(filename, plot_centre=None, plot_radius=0, plot_radius_buffer=0, s
 
 
 def save_file(filename, pointcloud, headers_of_interest=None, silent=False):
-    print(headers_of_interest)
     if headers_of_interest is None:
         headers_of_interest = []
     if pointcloud.shape[0] == 0:
@@ -184,7 +183,7 @@ def get_heights_above_DTM(points, DTM):
 
 
 def clustering(points, eps=0.05, min_samples=2, n_jobs=1, mode='DBSCAN'):
-    print("Clustering")
+    # print("Clustering")
     assert mode == 'DBSCAN' or mode == 'HDBSCAN'
 
     if mode == 'HDBSCAN':
@@ -193,7 +192,6 @@ def clustering(points, eps=0.05, min_samples=2, n_jobs=1, mode='DBSCAN'):
 
     elif mode == 'DBSCAN':
         db = DBSCAN(eps=eps, min_samples=min_samples, metric='euclidean', algorithm='kd_tree', n_jobs=n_jobs).fit(points[:, :3])
-
         return np.hstack((points, np.atleast_2d(db.labels_).T))
 
 

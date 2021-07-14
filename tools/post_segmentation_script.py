@@ -23,6 +23,7 @@ import random
 import os
 from sklearn.neighbors import NearestNeighbors
 from tools import load_file, save_file, subsample_point_cloud, get_heights_above_DTM, clustering
+from scipy.interpolate import griddata
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
@@ -53,8 +54,14 @@ class PostProcessing:
         """
         This function will generate a Digital Terrain Model (DTM) based on the terrain labelled points.
         """
-        self.terrain_points = self.terrain_points[np.logical_and(self.terrain_points[:, 2] >= np.percentile(self.terrain_points[:, 2], 2.5),
-                                                                 self.terrain_points[:, 2] <= np.percentile(self.terrain_points[:, 2], 80))]
+        lower_thresh = np.percentile(self.terrain_points[:, 2], 2.5)
+        upper_thresh = np.percentile(self.terrain_points[:, 2], 80)
+        median_height = np.median(self.terrain_points[:, 2])
+        if upper_thresh < median_height + 3:  # If the upper threshold is within 3 m of the median, don't crop anything. The threshold is intended to crop false positive terrain classifications often in the canopy.
+            upper_thresh = np.max(self.terrain_points[:, 2])
+
+        self.terrain_points = self.terrain_points[np.logical_and(self.terrain_points[:, 2] >= lower_thresh,
+                                                                 self.terrain_points[:, 2] <= upper_thresh)]
 
         kdtree = spatial.cKDTree(self.terrain_points[:, :2], leafsize=10000)
         xmin = np.floor(np.min(self.terrain_points[:, 0])) - 3
@@ -91,13 +98,20 @@ class PostProcessing:
                     kdtree.query_ball_point(grid_points[:, :2], r=self.parameters['fine_grid_resolution'] * 5)]
             grid_points = grid_points[inds, :]
 
-        if smoothing_radius > 0:
-            kdtree2 = spatial.cKDTree(grid_points, leafsize=1000)
-            results = kdtree2.query_ball_point(grid_points, r=smoothing_radius)
-            smoothed_Z = np.zeros((0, 1))
-            for i in results:
-                smoothed_Z = np.vstack((smoothed_Z, np.nanmean(grid_points[i, 2])))
-            grid_points[:, 2] = np.squeeze(smoothed_Z)
+        grid_points = clustering(grid_points, eps=self.parameters['fine_grid_resolution'] * 1.5, mode='DBSCAN')
+        grid_points_keep = grid_points[grid_points[:, -1] == 0]
+
+        grid = griddata((grid_points_keep[:, 0], grid_points_keep[:, 1]), grid_points_keep[:, 2], grid_points[:, 0:2], method='linear',
+                        fill_value=np.median(grid_points_keep[:, 2]))
+        grid_points[:, 2] = grid
+        #
+        # if smoothing_radius > 0:
+        #     kdtree2 = spatial.cKDTree(grid_points, leafsize=1000)
+        #     results = kdtree2.query_ball_point(grid_points, r=smoothing_radius)
+        #     smoothed_Z = np.zeros((0, 1))
+        #     for i in results:
+        #         smoothed_Z = np.vstack((smoothed_Z, np.nanmean(grid_points[i, 2])))
+        #     grid_points[:, 2] = np.squeeze(smoothed_Z)
 
         return grid_points
 

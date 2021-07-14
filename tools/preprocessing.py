@@ -2,7 +2,6 @@ import numpy as np
 import time
 import glob
 import random
-import warnings
 import pandas as pd
 from copy import deepcopy
 import matplotlib

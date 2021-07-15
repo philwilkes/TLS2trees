@@ -563,16 +563,14 @@ class MeasureTree:
             max_j = len(input_data)
             clusteroutputlist = []
             skeletonoutputlist = []
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                with get_context("spawn").Pool(processes=self.num_procs) as pool:
-                    for i in pool.imap_unordered(MeasureTree.slice_clustering, input_data):
-                        if j % 100 == 0:
-                            print('\r', j, '/', max_j, end='')
-                        j += 1
-                        cluster, skel = i
-                        clusteroutputlist.append(cluster)
-                        skeletonoutputlist.append(skel)
+            with get_context("spawn").Pool(processes=self.num_procs) as pool:
+                for i in pool.imap_unordered(MeasureTree.slice_clustering, input_data):
+                    if j % 100 == 0:
+                        print('\r', j, '/', max_j, end='')
+                    j += 1
+                    cluster, skel = i
+                    clusteroutputlist.append(cluster)
+                    skeletonoutputlist.append(skel)
             print('\r', max_j, '/', max_j, end='')
             print('\nDone\n')
             skeleton_array = np.vstack(skeletonoutputlist)
@@ -830,27 +828,6 @@ class MeasureTree:
                   headers_of_interest=list(self.cyl_dict))
 
         if 1:
-            print("Making cleaned cylinder visualisation...")
-            j = 0
-            cleaned_cyl_vis = []
-            max_j = np.shape(cleaned_cyls)[0]
-            # interpolated_cyl_vis = np.zeros((0,9))
-            with get_context("spawn").Pool(processes=self.num_procs) as pool:
-                for i in pool.imap_unordered(self.make_cyl_visualisation, cleaned_cyls):
-                    # interpolated_cyl_vis = np.vstack((interpolated_cyl_vis,i))
-                    cleaned_cyl_vis.append(i)
-                    if j % 100 == 0:
-                        print('\r', j, '/', max_j, end='')
-                    j += 1
-            cleaned_cyl_vis = np.vstack(cleaned_cyl_vis)
-            print('\r', max_j, '/', max_j, end='')
-            print('\nDone\n')
-
-            print("\nSaving cylinder visualisation...")
-            save_file(self.output_dir + 'cleaned_cyl_vis.las', cleaned_cyl_vis,
-                      headers_of_interest=list(self.cyl_dict))
-
-        if 1:
             max_angle = 30
             self.vegetation_points = self.get_heights_above_DTM(self.vegetation_points)
             self.ground_veg = self.vegetation_points[self.vegetation_points[:, self.veg_dict['height_above_dtm']] <= self.parameters['ground_veg_cutoff_height']]
@@ -943,11 +920,13 @@ class MeasureTree:
 
         tree_data = np.zeros((0, 15))
         intelligent_plot_cropping = False
+        plot_centre = np.loadtxt(self.output_dir + 'plot_centre_coords.csv')
+
         if self.parameters['plot_radius'] != 0 and self.parameters['plot_radius_buffer'] != 0:
             print("Using intelligent plot cropping mode...")
             intelligent_plot_cropping = True
-            plot_centre = self.parameters['plot_centre']
 
+        cleaned_cylinders = np.zeros((0, cleaned_cyls.shape[1]))
         for tree_id in np.unique(cleaned_cyls[:, self.cyl_dict['tree_id']]):
             tree = cleaned_cyls[cleaned_cyls[:, self.cyl_dict['tree_id']] == tree_id]
             tree_vegetation = self.assigned_vegetation_points[self.assigned_vegetation_points[:, self.veg_dict['tree_id']] == tree_id]
@@ -1025,38 +1004,71 @@ class MeasureTree:
                 this_trees_data[:, tree_data_dict['Crown_top_z']] = tree_max_point[2]
                 this_trees_data[:, tree_data_dict['mean_understory_height_in_5m_radius']] = mean_understory_height_in_5m_radius
 
+                text_size = 0.00256
+                line_height = 0.025
+                if DBH_X != 0 and DBH_Y != 0 and DBH_Z != 0 and x_tree_base != 0 and y_tree_base != 0:
+                    line0 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y + line_height, DBH_Z + line_height,
+                                                         DBH * 0.5, '            DIAM: ' + str(np.around(DBH, 2)) + 'm')
+                    line1 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y, DBH_Z, DBH * 0.5,
+                                                         '       CCI AT BH: ' + str(np.around(mean_CCI_at_BH, 2)))
+                    line2 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 2 * line_height,
+                                                         DBH_Z - 2 * line_height, DBH * 0.5,
+                                                         '          HEIGHT: ' + str(np.around(tree_height, 2)) + 'm')
+                    line3 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height,
+                                                         DBH_Z - 3 * line_height, DBH * 0.5,
+                                                         '          VOLUME: ' + str(np.around(volume, 2)) + 'm')
+                    line4 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 4 * line_height,
+                                                         DBH_Z - 4 * line_height, DBH * 0.5, '    CHECK VOLUME: ' + str(
+                            np.around((np.pi * (0.5 * DBH) ** 2) * tree_height, 2)) + 'm')  # TODO RECHECK and delete.
+
+                    height_measurement_line = self.points_along_line(x_tree_base, y_tree_base, z_tree_base, x_tree_base,
+                                                                     y_tree_base, z_tree_base + tree_height,
+                                                                     resolution=0.025)
+
+                    dbh_circle_points = self.create_3d_circles_as_points_flat(DBH_X, DBH_Y, DBH_Z, DBH / 2,
+                                                                              circle_points=100)
+
                 if intelligent_plot_cropping:
                     if np.linalg.norm(np.array([x_tree_base, y_tree_base]) - np.array(plot_centre)) < self.parameters['plot_radius']:
                         tree_data = np.vstack((tree_data, this_trees_data))
                         stem_points_sorted = np.vstack((stem_points_sorted, tree_points))
                         veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
+                        cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
+                        self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3, line4,
+                                                           height_measurement_line, dbh_circle_points))
 
                 else:
                     tree_data = np.vstack((tree_data, this_trees_data))
                     stem_points_sorted = np.vstack((stem_points_sorted, tree_points))
                     veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
-
-            text_size = 0.00256
-            line_height = 0.025
-            if DBH_X != 0 and DBH_Y != 0 and DBH_Z != 0 and x_tree_base != 0 and y_tree_base != 0:
-                line0 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y + line_height, DBH_Z + line_height, DBH * 0.5, '            DIAM: ' + str(np.around(DBH, 2)) + 'm')
-                line1 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y, DBH_Z, DBH * 0.5, '       CCI AT BH: ' + str(np.around(mean_CCI_at_BH, 2)))
-                line2 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 2 * line_height, DBH_Z - 2 * line_height, DBH * 0.5, '          HEIGHT: ' + str(np.around(tree_height, 2)) + 'm')
-                line3 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height, DBH_Z - 3 * line_height, DBH * 0.5, '          VOLUME: ' + str(np.around(volume, 2)) + 'm')
-                line4 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 4 * line_height, DBH_Z - 4 * line_height, DBH * 0.5, '    CHECK VOLUME: ' + str(np.around((np.pi * (0.5 * DBH) ** 2) * tree_height, 2)) + 'm') #TODO RECHECK and delete.
-
-                height_measurement_line = self.points_along_line(x_tree_base, y_tree_base, z_tree_base, x_tree_base,
-                                                                 y_tree_base, z_tree_base + tree_height,
-                                                                 resolution=0.025)
-
-                dbh_circle_points = self.create_3d_circles_as_points_flat(DBH_X, DBH_Y, DBH_Z, DBH / 2,
-                                                                          circle_points=100)
-                self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3, line4,
-                                                   height_measurement_line, dbh_circle_points))
+                    cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
+                    self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3, line4,
+                                                       height_measurement_line, dbh_circle_points))
 
         save_file(self.output_dir + 'text_point_cloud.las', self.text_point_cloud)
         save_file(self.output_dir + 'stem_points_sorted.las', stem_points_sorted, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'tree_id', 'height_above_DTM'])
         save_file(self.output_dir + 'veg_points_sorted.las', veg_points_sorted, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'tree_id', 'height_above_DTM'])
+
+        if 1:
+            print("Making cleaned cylinder visualisation...")
+            j = 0
+            cleaned_cyl_vis = []
+            max_j = np.shape(cleaned_cylinders)[0]
+            # interpolated_cyl_vis = np.zeros((0,9))
+            with get_context("spawn").Pool(processes=self.num_procs) as pool:
+                for i in pool.imap_unordered(self.make_cyl_visualisation, cleaned_cylinders):
+                    # interpolated_cyl_vis = np.vstack((interpolated_cyl_vis,i))
+                    cleaned_cyl_vis.append(i)
+                    if j % 100 == 0:
+                        print('\r', j, '/', max_j, end='')
+                    j += 1
+            cleaned_cyl_vis = np.vstack(cleaned_cyl_vis)
+            print('\r', max_j, '/', max_j, end='')
+            print('\nDone\n')
+
+            print("\nSaving cylinder visualisation...")
+            save_file(self.output_dir + 'cleaned_cyl_vis.las', cleaned_cyl_vis,
+                      headers_of_interest=list(self.cyl_dict))
 
         if intelligent_plot_cropping:
             self.terrain_points = self.terrain_points[np.linalg.norm(self.terrain_points[:, :2]-plot_centre, axis=1) < self.parameters['plot_radius']]

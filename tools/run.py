@@ -37,63 +37,69 @@ if __name__ == '__main__':
 
     # point_clouds_to_process = ["C:/Users/seank/Downloads/CULS/CULS/plot_1_annotated.las"]
     point_clouds_to_process = [
-                               'C:/Users/seank/Documents/NDT Project/Western Australia/Leach P111.las',
-                               'C:/Users/seank/Documents/NDT Project/Western Australia/Leach P61.las',
-                               'C:/Users/seank/Documents/NDT Project/Western Australia/Denham P264.las',
-                               'C:/Users/seank/Documents/NDT Project/Western Australia/Denham P257.las',
-                               'C:/Users/seank/Documents/NDT Project/Western Australia/Leach_P111_TLS.las',
-                               'C:/Users/seank/Documents/NDT Project/Western Australia/Leach_P61_TLS.las',
-                               'C:/Users/seank/Documents/NDT Project/Western Australia/Denham_P264_TLS.las',
-                               'C:/Users/seank/Documents/NDT Project/Western Australia/Denham_P257_TLS.las',
-                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Fleas P1.las',
-                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Fleas P2.las',
-                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Fleas P3.las',
+                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Leach P111.las',
+                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Leach P61.las',
+                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Denham P264.las',
+                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Denham P257.las',
+                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Leach_P111_TLS.las',
+                               #
+                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Leach_P61_TLS.las',
+                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Denham_P264_TLS.las',
+                               # 'C:/Users/seank/Documents/NDT Project/Western Australia/Denham_P257_TLS.las',
+                               'C:/Users/seank/Documents/NDT Project/Western Australia/Fleas P1.las',
+                               'C:/Users/seank/Documents/NDT Project/Western Australia/Fleas P2.las',
+
+                               'C:/Users/seank/Documents/NDT Project/Western Australia/Fleas P3.las',
 
                                # NSW
-                               # 'C:/Users/seank/Documents/NDT Project/New South Wales/Site1Plot1.las',
-                               # 'C:/Users/seank/Documents/NDT Project/New South Wales/Site1Plot2.las',
-                               # 'C:/Users/seank/Documents/NDT Project/New South Wales/Site2Plot1.las',
+                               'C:/Users/seank/Documents/NDT Project/New South Wales/Site1Plot1.las',
+                               'C:/Users/seank/Documents/NDT Project/New South Wales/Site1Plot2.las',
+                               'C:/Users/seank/Documents/NDT Project/New South Wales/Site2Plot1.las',
                                # 'C:/Users/seank/Documents/NDT Project/New South Wales/Site3SingleTree.las',
 
                                ]
     plot_centres = [
-                    [445915.24, 6314467.17],
-                    [445949.37, 6314325.78],
-                    [417213.82, 6335818.69],
-                    [417596.50, 6335782.84],
-                    [445913.42, 6314465.786],
-                    [445948.35, 6314325.54],
-                    [417212.755, 6335817.434],
-                    [417595.946, 6335779.279],
-                    # None,
-                    # None,
-                    # None,
+                    # [445915.24, 6314467.17],
+                    # [445949.37, 6314325.78],
+                    # [417213.82, 6335818.69],
+                    # [417596.50, 6335782.84],
+                    # [445913.42, 6314465.786],
+                    #
+                    # [445948.35, 6314325.54],
+                    # [417212.755, 6335817.434],
+                    # [417595.946, 6335779.279],
+                    None,
+                    None,
+
+                    None,
 
                     # NSW
-                    # [478984.407, 6661926.300],
-                    # [478965.77, 6661983.050],
-                    # [519795.32, 6690123.967],
+                    [478984.407, 6661926.300],
+                    [478965.77, 6661983.050],
+                    [519795.32, 6690123.967],
                     # None,
     ]
 
     plot_radii = [
-                  20,
-                  20,
-                  20,
-                  20,
-                  20,
-                  20,
-                  20,
                   # 20,
                   # 20,
                   # 20,
+                  # 20,
+                  # 20,
+                  #
+                  # 20,
+                  # 20,
+                  20,
+                  20,
+                  20,
 
-                  # 20,
-                  # 20,
-                  # 9
+                  20,
+
+                  20,
+                  20,
+                  9,
+                  # None
     ]
-
-
 
     for point_cloud, plot_centre, radius in zip(point_clouds_to_process, plot_centres, plot_radii):
         print(point_cloud)
@@ -133,16 +139,16 @@ if __name__ == '__main__':
         # sem_seg = SemanticSegmentation(parameters)
         # sem_seg.inference()
         # del sem_seg
+        #
+        # object_1 = PostProcessing(parameters)
+        # object_1.process_point_cloud()
+        # del object_1
+        #
+        measure1 = MeasureTree(parameters)
+        measure1.run_measurement_extraction()
+        del measure1
 
-        object_1 = PostProcessing(parameters)
-        object_1.process_point_cloud()
-        del object_1
-        #
-        # measure1 = MeasureTree(parameters)
-        # measure1.run_measurement_extraction()
-        # del measure1
-        #
-        # ReportWriter(parameters)
+        ReportWriter(parameters)
 
         # except:
         #     None

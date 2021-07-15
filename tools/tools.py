@@ -122,7 +122,10 @@ def load_file(filename, plot_centre=None, plot_radius=0, plot_radius_buffer=0, s
     original_num_points = pointcloud.shape[0]
 
     if plot_centre is None:
-        plot_centre = np.mean(pointcloud[:, :2], axis=0)
+        mins = np.min(pointcloud[:, :2], axis=0)
+        maxes = np.max(pointcloud[:, :2], axis=0)
+        plot_centre = (maxes+mins)/2
+        print('Plot centre', plot_centre)
 
     if plot_radius > 0:
         distances = np.linalg.norm(pointcloud[:, :2] - plot_centre, axis=1)

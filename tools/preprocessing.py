@@ -39,9 +39,8 @@ class Preprocessing:
 
         if self.parameters['plot_centre'] is None:
             mins = np.min(self.point_cloud[:, :2], axis=0)
-            maxes = np.min(self.point_cloud[:, :2], axis=0)
-            ranges = maxes - mins
-            self.parameters['plot_centre'] = mins + ranges/2
+            maxes = np.max(self.point_cloud[:, :2], axis=0)
+            self.parameters['plot_centre'] = (mins + maxes) / 2
 
         np.savetxt(self.output_dir + 'plot_centre_coords.csv', self.parameters['plot_centre'])
 

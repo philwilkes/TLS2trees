@@ -33,6 +33,7 @@ class MeasureTree:
         self.output_dir = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/' + self.filename.split('/')[-1][:-4] + '_FSCT_output/'
         self.filename = self.filename.split('/')[-1]
 
+
         self.num_procs = parameters['num_procs']
         self.num_neighbours = parameters['num_neighbours']
         self.slice_thickness = parameters['slice_thickness']
@@ -827,16 +828,40 @@ class MeasureTree:
         save_file(self.output_dir + 'cleaned_cyls.las', cleaned_cyls,
                   headers_of_interest=list(self.cyl_dict))
 
-        if 1:
-            max_angle = 30
-            self.vegetation_points = self.get_heights_above_DTM(self.vegetation_points)
-            self.ground_veg = self.vegetation_points[self.vegetation_points[:, self.veg_dict['height_above_dtm']] <= self.parameters['ground_veg_cutoff_height']]
-            self.vegetation_points = self.vegetation_points[self.vegetation_points[:, self.veg_dict['height_above_dtm']] > self.parameters['ground_veg_cutoff_height']]
+        max_angle = 30
+        self.vegetation_points = self.get_heights_above_DTM(self.vegetation_points)
+        self.ground_veg = self.vegetation_points[self.vegetation_points[:, self.veg_dict['height_above_dtm']] <= self.parameters['ground_veg_cutoff_height']]
+        save_file(self.output_dir + 'ground_veg.las', self.ground_veg, headers_of_interest=list(self.veg_dict))
 
-            self.subsampled_sorted_veg = np.zeros((0, self.vegetation_points.shape[1]))
-            self.vegetation_points_subsampled = subsample_point_cloud(self.vegetation_points, min_spacing=0.1, num_procs=self.parameters['num_procs'])
-            stem_kdtree = spatial.cKDTree(cleaned_cyls[:, :2], leafsize=1000)
-            results = stem_kdtree.query_ball_point(self.vegetation_points_subsampled[:, :2], r=self.parameters['veg_sorting_range'])
+        self.vegetation_points = self.vegetation_points[self.vegetation_points[:, self.veg_dict['height_above_dtm']] > self.parameters['ground_veg_cutoff_height']]
+        self.assigned_vegetation_points = np.zeros((0, self.vegetation_points.shape[1]))
+        self.subsampled_sorted_veg = np.zeros((0, self.vegetation_points.shape[1]))
+        self.vegetation_points_subsampled = subsample_point_cloud(self.vegetation_points, min_spacing=0.1, num_procs=self.parameters['num_procs'])
+        stem_kdtree = spatial.cKDTree(cleaned_cyls[:, :2], leafsize=1000)
+        results = stem_kdtree.query_ball_point(self.vegetation_points_subsampled[:, :2], r=self.parameters['veg_sorting_range'])
+
+        i = 0
+        print("Sorting vegetation...")
+        for result in results:
+            veg_point = self.vegetation_points_subsampled[i, :]
+            nearby_cyls = cleaned_cyls[result]
+            vector_array_1 = nearby_cyls[:, :3] - veg_point[:3]
+            distances_2d = np.atleast_2d(np.linalg.norm(vector_array_1[:, :2], axis=1)).T
+            vector_array_1 = vector_array_1/np.atleast_2d(np.linalg.norm(vector_array_1, axis=1)).T
+            vector_array_2 = nearby_cyls[:, 3:6]
+
+            vector_array_1[vector_array_1[:, 2] < 0, 2] = vector_array_1[vector_array_1[:, 2] < 0, 2] * -1
+            vector_array_2[vector_array_2[:, 2] < 0, 2] = vector_array_2[vector_array_2[:, 2] < 0, 2] * -1
+            angle_bool = self.compute_angle(vector_array_1, vector_array_2) <= max_angle
+
+            if np.sum(angle_bool) != 0:
+                best_tree_id = nearby_cyls[angle_bool][np.argmin(distances_2d[angle_bool]), self.cyl_dict['tree_id']]
+                veg_point[self.veg_dict["tree_id"]] = best_tree_id
+                self.subsampled_sorted_veg = np.vstack((self.subsampled_sorted_veg, np.atleast_2d(veg_point)))
+            i += 1
+
+        if self.subsampled_sorted_veg.shape[0] < 2:
+            max_angle = 60
             i = 0
             print("Sorting vegetation...")
             for result in results:
@@ -844,7 +869,7 @@ class MeasureTree:
                 nearby_cyls = cleaned_cyls[result]
                 vector_array_1 = nearby_cyls[:, :3] - veg_point[:3]
                 distances_2d = np.atleast_2d(np.linalg.norm(vector_array_1[:, :2], axis=1)).T
-                vector_array_1 = vector_array_1/np.atleast_2d(np.linalg.norm(vector_array_1, axis=1)).T
+                vector_array_1 = vector_array_1 / np.atleast_2d(np.linalg.norm(vector_array_1, axis=1)).T
                 vector_array_2 = nearby_cyls[:, 3:6]
 
                 vector_array_1[vector_array_1[:, 2] < 0, 2] = vector_array_1[vector_array_1[:, 2] < 0, 2] * -1
@@ -852,62 +877,53 @@ class MeasureTree:
                 angle_bool = self.compute_angle(vector_array_1, vector_array_2) <= max_angle
 
                 if np.sum(angle_bool) != 0:
-                    best_tree_id = nearby_cyls[angle_bool][np.argmin(distances_2d[angle_bool]), self.cyl_dict['tree_id']]
+                    best_tree_id = nearby_cyls[angle_bool][
+                        np.argmin(distances_2d[angle_bool]), self.cyl_dict['tree_id']]
                     veg_point[self.veg_dict["tree_id"]] = best_tree_id
                     self.subsampled_sorted_veg = np.vstack((self.subsampled_sorted_veg, np.atleast_2d(veg_point)))
                 i += 1
 
+        if self.subsampled_sorted_veg.shape[0] >= 2:
             neighbours = NearestNeighbors(n_neighbors=1, algorithm='kd_tree', metric='euclidean', radius=0.15).fit(self.subsampled_sorted_veg[:, :3])
             _, indices = neighbours.kneighbors(self.vegetation_points[:, :3])
             self.assigned_vegetation_points = self.vegetation_points
             print(self.assigned_vegetation_points.shape, self.subsampled_sorted_veg.shape)
             print(self.assigned_vegetation_points[:, self.veg_dict['tree_id']].shape, self.subsampled_sorted_veg[indices, self.veg_dict['tree_id']].shape)
             self.assigned_vegetation_points[:, self.veg_dict['tree_id']] = np.atleast_2d(self.subsampled_sorted_veg[indices, self.veg_dict['tree_id']]).T
-
             self.unassigned_vegetation_points = self.assigned_vegetation_points[self.assigned_vegetation_points[:, self.veg_dict['tree_id']] == 0]
 
-            print("Saving vegetation points...")
-            u, counts = np.unique(self.subsampled_sorted_veg[:, self.veg_dict['tree_id']], return_counts=True)
-            print(u, counts)
-            print(np.max(self.subsampled_sorted_veg[:, :3], axis=0))
-            print(np.min(self.subsampled_sorted_veg[:, :3], axis=0))
-            # save_file(self.output_dir + 'assigned_vegetation_points.las', self.assigned_vegetation_points, headers_of_interest=list(self.veg_dict))
-            # save_file(self.output_dir + 'unassigned_vegetation_points.las', self.unassigned_vegetation_points, headers_of_interest=list(self.veg_dict))
-            print("Done vegetation points...")
 
-            save_file(self.output_dir + 'ground_veg.las', self.ground_veg, headers_of_interest=list(self.veg_dict))
+        print("Measuring canopy gap fraction...")
+        veg_kdtree = spatial.cKDTree(self.vegetation_points[:, :2], leafsize=10000)
+        ground_veg_kdtree = spatial.cKDTree(self.ground_veg[:, :2], leafsize=10000)
+        xmin = np.floor(np.min(self.terrain_points[:, 0]))
+        ymin = np.floor(np.min(self.terrain_points[:, 1]))
+        xmax = np.ceil(np.max(self.terrain_points[:, 0]))
+        ymax = np.ceil(np.max(self.terrain_points[:, 1]))
+        x_points = np.linspace(xmin, xmax, int(np.ceil((xmax - xmin) / self.parameters['Vegetation_coverage_resolution'])) + 1)
+        y_points = np.linspace(ymin, ymax, int(np.ceil((ymax - ymin) / self.parameters['Vegetation_coverage_resolution'])) + 1)
 
-            print("Measuring canopy gap fraction...")
-            veg_kdtree = spatial.cKDTree(self.vegetation_points[:, :2], leafsize=10000)
-            ground_veg_kdtree = spatial.cKDTree(self.ground_veg[:, :2], leafsize=10000)
-            xmin = np.floor(np.min(self.terrain_points[:, 0]))
-            ymin = np.floor(np.min(self.terrain_points[:, 1]))
-            xmax = np.ceil(np.max(self.terrain_points[:, 0]))
-            ymax = np.ceil(np.max(self.terrain_points[:, 1]))
-            x_points = np.linspace(xmin, xmax, int(np.ceil((xmax - xmin) / self.parameters['Vegetation_coverage_resolution'])) + 1)
-            y_points = np.linspace(ymin, ymax, int(np.ceil((ymax - ymin) / self.parameters['Vegetation_coverage_resolution'])) + 1)
+        convexhull = spatial.ConvexHull(self.DTM[:, :2])
+        self.canopy_density = np.zeros((0, 4))
+        self.ground_area = 0
+        self.canopy_area = 0
+        self.ground_veg_area = 0
+        for x in x_points:
+            for y in y_points:
+                if self.inside_conv_hull(np.array([x, y]), convexhull):
+                    indices = veg_kdtree.query_ball_point([x, y], r=self.parameters['Vegetation_coverage_resolution'], p=10)
+                    ground_veg_indices = ground_veg_kdtree.query_ball_point([x, y], r=self.parameters['Vegetation_coverage_resolution'], p=10)
 
-            convexhull = spatial.ConvexHull(self.DTM[:, :2])
-            self.canopy_density = np.zeros((0, 4))
-            self.ground_area = 0
-            self.canopy_area = 0
-            self.ground_veg_area = 0
-            for x in x_points:
-                for y in y_points:
-                    if self.inside_conv_hull(np.array([x, y]), convexhull):
-                        indices = veg_kdtree.query_ball_point([x, y], r=self.parameters['Vegetation_coverage_resolution'], p=10)
-                        ground_veg_indices = ground_veg_kdtree.query_ball_point([x, y], r=self.parameters['Vegetation_coverage_resolution'], p=10)
+                    self.ground_area += 1
+                    if len(indices) > 5:
+                        self.canopy_area += 1
 
-                        self.ground_area += 1
-                        if len(indices) > 5:
-                            self.canopy_area += 1
+                    if len(ground_veg_indices) > 5:
+                        self.ground_veg_area += 1
+                        self.canopy_density = np.vstack((self.canopy_density, np.array([[x, y, 0, len(indices)]])))
 
-                        if len(ground_veg_indices) > 5:
-                            self.ground_veg_area += 1
-                            self.canopy_density = np.vstack((self.canopy_density, np.array([[x, y, 0, len(indices)]])))
-
-            print(self.canopy_area, self.ground_area, "Canopy Gap Fraction:", self.canopy_area / self.ground_area)
-            np.savetxt(self.output_dir + 'canopy_density.csv', self.canopy_density)
+        print(self.canopy_area, self.ground_area, "Canopy Gap Fraction:", self.canopy_area / self.ground_area)
+        np.savetxt(self.output_dir + 'canopy_density.csv', self.canopy_density)
 
         stem_points_sorted = np.zeros((0, len(list(self.stem_dict))))
         veg_points_sorted = np.zeros((0, len(list(self.veg_dict))))

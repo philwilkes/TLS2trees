@@ -120,7 +120,7 @@ class PostProcessing:
         self.DTM = self.make_DTM(smoothing_radius=3 * self.parameters['fine_grid_resolution'], crop_dtm=True)
         save_file(self.output_dir + 'DTM.las', self.DTM)
 
-        if self.parameters['plot_radius'] is not None:
+        if self.parameters['plot_radius'] is not None or self.parameters['plot_radius'] != 0:
             self.plot_area_estimate = np.pi*(self.parameters['plot_radius'])**2
         else:
             self.convexhull = spatial.ConvexHull(self.terrain_points[:, :2])

@@ -2,7 +2,7 @@ from preprocessing import Preprocessing
 from inference import SemanticSegmentation
 from post_segmentation_script import PostProcessing
 # from testing import PostProcessing
-from report_writer import ReportWriter
+# from report_writer import ReportWriter
 import glob
 import numpy as np
 from measure import MeasureTree

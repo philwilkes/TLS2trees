@@ -45,14 +45,14 @@ class Preprocessing:
         np.savetxt(self.output_dir + 'plot_centre_coords.csv', self.parameters['plot_centre'])
 
         if self.parameters['subsample']:
-            self.point_cloud = subsample_point_cloud(self.point_cloud, self.parameters['subsampling_min_spacing'], self.num_procs)
+            self.point_cloud = subsample_point_cloud(self.point_cloud,
+                                                     self.parameters['subsampling_min_spacing'],
+                                                     self.num_procs)
 
         self.num_points_subsampled = self.point_cloud.shape[0]
 
-        if self.parameters['plot_radius'] != 0:
-            save_file(self.output_dir + self.filename[:-4] + '_' + str(self.parameters['plot_radius']+self.parameters['plot_radius_buffer']) + '_m_crop.las',
-                      self.point_cloud, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
-
+        save_file(self.output_dir + self.filename[:-4] + '_' + 'working_point_cloud.las',
+                  self.point_cloud, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
 
         self.point_cloud = self.point_cloud[:, :3]  # Trims off unneeded dimensions if present.
 
@@ -64,7 +64,8 @@ class Preprocessing:
 
             save_file(self.output_dir + self.filename[:-4] + '_hack_mode_cloud.las', self.point_cloud)
 
-        self.global_shift = [np.mean(self.point_cloud[:, 0]), np.mean(self.point_cloud[:, 1]),
+        self.global_shift = [np.mean(self.point_cloud[:, 0]),
+                             np.mean(self.point_cloud[:, 1]),
                              np.mean(self.point_cloud[:, 2])]
 
         self.point_cloud[:, :3] = self.point_cloud[:, :3] - self.global_shift

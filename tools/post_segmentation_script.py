@@ -34,8 +34,6 @@ class PostProcessing:
         self.filename = self.parameters['input_point_cloud'].replace('\\', '/')
         self.output_dir = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/' + self.filename.split('/')[-1][:-4] + '_FSCT_output/'
         self.filename = self.filename.split('/')[-1]
-        if self.parameters['plot_radius'] != 0:
-            self.filename = self.filename[:-4] + '_' + str(self.parameters['plot_radius'] + self.parameters['plot_radius_buffer']) + '_m_crop.las'
 
         self.noise_class_label = parameters['noise_class']
         self.terrain_class_label = parameters['terrain_class']
@@ -43,7 +41,7 @@ class PostProcessing:
         self.cwd_class_label = parameters['cwd_class']
         self.stem_class_label = parameters['stem_class']
         print("Loading segmented point cloud...")
-        self.point_cloud, self.headers_of_interest = load_file(self.output_dir+self.filename[:-4] + '_segmented.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label'])
+        self.point_cloud, self.headers_of_interest = load_file(self.output_dir+'segmented.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label'])
         self.point_cloud = np.hstack((self.point_cloud, np.zeros((self.point_cloud.shape[0], 1))))  # Add height above DTM column
         self.headers_of_interest.append('height_above_DTM')  # Add height_above_DTM to the headers.
         self.label_index = self.headers_of_interest.index('label')
@@ -156,7 +154,7 @@ class PostProcessing:
 
         self.terrain_points[:, self.label_index] = self.terrain_class_label
         self.cleaned_pc = np.vstack((self.terrain_points, self.vegetation_points, self.cwd_points, self.stem_points))
-        save_file(self.output_dir + self.filename[:-4] + '_segmented_cleaned.las', self.cleaned_pc, headers_of_interest=self.headers_of_interest)
+        save_file(self.output_dir + 'segmented_cleaned.las', self.cleaned_pc, headers_of_interest=self.headers_of_interest)
 
         processing_report = pd.read_csv(self.output_dir + 'processing_report.csv', index_col=None)
         self.post_processing_time_end = time.time()

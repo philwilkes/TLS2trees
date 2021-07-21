@@ -1,8 +1,7 @@
 from preprocessing import Preprocessing
 from inference import SemanticSegmentation
 from post_segmentation_script import PostProcessing
-# from testing import PostProcessing
-# from report_writer import ReportWriter
+from report_writer import ReportWriter
 import glob
 import numpy as np
 from measure import MeasureTree
@@ -107,7 +106,7 @@ if __name__ == '__main__':
 
         parameters = dict(input_point_cloud=point_cloud,
                           batch_size=18,  # If you get CUDA errors, lower this. This is suitable for 24 GB of vRAM.
-                          num_procs=10,  # Number of CPU cores you want to use.
+                          num_procs=10,  # Number of CPU cores you want to use. If you run out of RAM, lower this.
                           max_diameter=5,  # Maximum diameter setting. Any measurements greater than this are considered erroneous and are ignored.
                           slice_thickness=0.2,  # default = 0.2
                           slice_increment=0.05,  # default = 0.05
@@ -132,23 +131,23 @@ if __name__ == '__main__':
 
         parameters.update(other_parameters)
         # try:
-        preprocessing = Preprocessing(parameters)
-        preprocessing.preprocess_point_cloud()
-        del preprocessing
-
-        sem_seg = SemanticSegmentation(parameters)
-        sem_seg.inference()
-        del sem_seg
-
-        object_1 = PostProcessing(parameters)
-        object_1.process_point_cloud()
-        del object_1
+        # preprocessing = Preprocessing(parameters)
+        # preprocessing.preprocess_point_cloud()
+        # del preprocessing
+        #
+        # sem_seg = SemanticSegmentation(parameters)
+        # sem_seg.inference()
+        # del sem_seg
+        #
+        # object_1 = PostProcessing(parameters)
+        # object_1.process_point_cloud()
+        # del object_1
         #
         # measure1 = MeasureTree(parameters)
         # measure1.run_measurement_extraction()
         # del measure1
-        #
-        # ReportWriter(parameters)
+
+        ReportWriter(parameters)
 
         # except:
         #     None

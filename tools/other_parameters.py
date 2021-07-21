@@ -20,5 +20,5 @@ other_parameters = dict(directory='../',
                         sorting_angle_tolerance=90,
                         max_search_radius=3,
                         max_search_angle=30,
-                        run_from_start=0,
+                        run_from_start=1,
                         )

@@ -73,9 +73,8 @@ class SemanticSegmentation:
         self.output_dir = self.directory + self.filename[:-4] + '_FSCT_output/'
         self.working_dir = self.directory + self.filename[:-4] + '_FSCT_output/working_directory/'
 
-        if self.parameters['plot_radius'] != 0:
-            self.filename = self.filename[:-4] + '_' + str(self.parameters['plot_radius'] + self.parameters['plot_radius_buffer']) + '_m_crop.las'
-            self.directory = self.output_dir
+        self.filename = self.filename[:-4] + '_working_point_cloud.las'
+        self.directory = self.output_dir
 
     def inference(self):
         test_dataset = TestingDataset(root_dir=self.working_dir,
@@ -117,7 +116,7 @@ class SemanticSegmentation:
 
         self.output = np.asarray(choose_most_confident_label(self.output_point_cloud, original_point_cloud), dtype='float64')
         self.output[:, :3] = self.output[:, :3] + global_shift
-        save_file(self.output_dir + self.filename[:-4] + '_segmented.las', self.output, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label'])
+        save_file(self.output_dir + 'segmented.las', self.output, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label'])
 
         self.sem_seg_end_time = time.time()
         self.sem_seg_total_time = self.sem_seg_end_time - self.sem_seg_start_time

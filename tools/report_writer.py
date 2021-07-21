@@ -10,6 +10,8 @@ import simplekml
 import os
 from scipy.spatial import ConvexHull
 from matplotlib import cm
+from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
 import warnings
 
 
@@ -53,7 +55,7 @@ class ReportWriter:
 
         mdFile.new_header(level=level, title='Plot ID: ' + str(self.parameters['PlotID']) + ' Site: ' + str(self.parameters['Site']))
         mdFile.new_header(level=level, title='Point Cloud Filename: ' + self.filename)
-        mdFile.new_header(level=level, title='Plot Centre: ' + str(self.parameters['plot_centre'][0]) + ' N, ' + str(self.parameters['plot_centre'][1]) + ' E, UTM Zone: ' + ' ' + str(self.parameters['UTM_zone_number']) + ' ' + str(self.parameters['UTM_zone_letter']) + ', Hemisphere: ' + hemisphere)
+        mdFile.new_header(level=level, title='Plot Centre: ' + str(np.around(self.parameters['plot_centre'][0], 2)) + ' N, ' + str(np.around(self.parameters['plot_centre'][1], 2)) + ' E, UTM Zone: ' + ' ' + str(self.parameters['UTM_zone_number']) + ' ' + str(self.parameters['UTM_zone_letter']) + ', Hemisphere: ' + hemisphere)
         mdFile.new_header(level=level, title='Plot Radius: ' + str(self.parameters['plot_radius']) + ' m, ' + ' Plot Radius Buffer: ' + str(self.parameters['plot_radius_buffer']) + ' m, Plot Area: '+ str(self.plot_area) + ' ha')
         mdFile.new_header(level=level, title='Stems/ha:  ' + str(self.stems_per_ha))
         mdFile.new_header(level=level, title='Mean DBH: ' + str(np.around(np.mean(self.DBH), 3)) + ' m')
@@ -167,7 +169,6 @@ class ReportWriter:
         ax1.set_ylabel("Northing + " + str(self.parameters['plot_centre'][1]) + ' (m)')
         # ax5.text("Plot centre: " + str([plot_centre_lat, plot_centre_lon])[1:-1], fontsize=10)
         ax1.axis('equal')
-        ax1.set_facecolor('whitesmoke')
         zmin = np.floor(np.min(self.DTM[:, 2]))
         zmax = np.ceil(np.max(self.DTM[:, 2]))
         contour_resolution = 1  # metres
@@ -185,16 +186,17 @@ class ReportWriter:
         # ax1.fill(shape_points[:, 0] - plot_centre[0], shape_points[:,1] - plot_centre[1], c='white', alpha=1, zorder=0)
         # ax1.plot(shape_points[:, 0] - plot_centre[0], shape_points[:, 1] - plot_centre[1], c='k', alpha=1, linewidth=0.5, zorder=1)
 
-        circle_face = plt.Circle(xy=(0, 0), radius=self.parameters['plot_radius'], facecolor='white', edgecolor=None, zorder=1)
-        ax1.add_patch(circle_face)
-
-        if self.parameters['plot_radius'] != 0 or self.parameters['plot_radius'] is not None:
+        if self.parameters['plot_radius'] != 0:
+            ax1.set_facecolor('whitesmoke')
+            circle_face = plt.Circle(xy=(0, 0), radius=self.parameters['plot_radius'], facecolor='white',
+                                     edgecolor=None, zorder=1)
+            ax1.add_patch(circle_face)
             self.ground_veg_map = self.ground_veg_map[np.linalg.norm(self.ground_veg_map[:, :2] - plot_centre, axis=1) < self.parameters['plot_radius']]
             self.cwd_points = self.cwd_points[np.linalg.norm(self.cwd_points[:, :2] - plot_centre, axis=1) < self.parameters['plot_radius']]
             self.DTM = self.DTM[np.linalg.norm(self.DTM[:, :2] - plot_centre, axis=1) < self.parameters['plot_radius']]
 
-        ax1.scatter(self.ground_veg_map[self.ground_veg_map[:, 2] == 0.5, 0] - plot_centre[0], self.ground_veg_map[self.ground_veg_map[:, 2] == 0.5, 1] - plot_centre[1], marker='.', s=4, c='#B2F2BB', zorder=3)
-        ax1.scatter(self.ground_veg_map[self.ground_veg_map[:, 2] == 1, 0] - plot_centre[0], self.ground_veg_map[self.ground_veg_map[:, 2] == 1, 1] - plot_centre[1], marker='.', s=4, c='#8CE99A', zorder=3)
+        ax1.scatter(self.ground_veg_map[self.ground_veg_map[:, 2] == 0.5, 0] - plot_centre[0], self.ground_veg_map[self.ground_veg_map[:, 2] == 0.5, 1] - plot_centre[1], marker='.', s=4, c='greenyellow', zorder=3)
+        ax1.scatter(self.ground_veg_map[self.ground_veg_map[:, 2] == 1, 0] - plot_centre[0], self.ground_veg_map[self.ground_veg_map[:, 2] == 1, 1] - plot_centre[1], marker='.', s=4, c='darkseagreen', zorder=3)
 
         circle_outline = plt.Circle(xy=(0, 0), radius=self.parameters['plot_radius'], fill=False, edgecolor='k', zorder=3)
         ax1.add_patch(circle_outline)
@@ -209,14 +211,13 @@ class ReportWriter:
         plt.clabel(subcontours, inline=True, fmt='%1.1f', fontsize=6, zorder=4)
         plt.clabel(contours, inline=True, fmt='%1.0f', fontsize=10, zorder=6)
 
-        ax1.scatter(self.x_tree_base - plot_centre[0], self.y_tree_base - plot_centre[1], marker='.', s=70, c='black', zorder=7)
-        ax1.scatter(self.x_tree_base - plot_centre[0], self.y_tree_base - plot_centre[1], marker='.', s=30, c='red', zorder=8)
+        ax1.scatter(self.x_tree_base - plot_centre[0], self.y_tree_base - plot_centre[1], marker='.', s=70,  facecolor='red', edgecolor='k', zorder=8)
+        ax1.scatter([0], [0], marker='x', s=40, c='blue', zorder=9)
 
         tree_label_offset = np.array([-0.01, 0.01]) * plot_max_distance
         for i in range(0, self.x_tree_base.shape[0]):
-            ax1.text((self.x_tree_base[i] - plot_centre[0]) + tree_label_offset[0], (self.y_tree_base[i] - plot_centre[1]) + tree_label_offset[1], self.treeNo[i], fontsize=6, zorder=9)
+            ax1.text((self.x_tree_base[i] - plot_centre[0]) + tree_label_offset[0], (self.y_tree_base[i] - plot_centre[1]) + tree_label_offset[1], self.treeNo[i], fontsize=6, zorder=10)
 
-        ax1.scatter([0], [0], marker='x', s=60, c='black', zorder=10)
         xmin = (np.min(self.DTM[:, 0]) - plot_centre[0])
         xmax = (np.max(self.DTM[:, 0]) - plot_centre[0])
         ymin = (np.min(self.DTM[:, 1]) - plot_centre[1])
@@ -224,6 +225,16 @@ class ReportWriter:
         padding = 0.1
         ax1.set_xlim([xmin + xmin*padding, xmax + xmax*padding])
         ax1.set_ylim([ymin + ymin*padding, ymax + ymax*padding])
+
+        handles = [Line2D(range(1), range(1), label='Understory Veg < 0.5m', color="white", marker='o', markerfacecolor='greenyellow', markeredgecolor='lightgrey'),
+                   Line2D(range(1), range(1), label='Understory Veg >= 0.5m', color="white", marker='o', markerfacecolor='darkseagreen', markeredgecolor='lightgrey'),
+                   Line2D(range(1), range(1), label='Coarse Woody Debris', color="white", marker='o', markerfacecolor='yellow', markeredgecolor='lightgrey'),
+                   Line2D(range(1), range(1), label='Stems', color="white", marker='o', markerfacecolor='red', markeredgecolor='k')]
+        ax1.legend(handles=handles,
+                   loc='lower center',
+                   bbox_to_anchor=(0.5, -0.2),
+                   ncol=2,
+                   facecolor="white")
 
         fig1.show(False)
 
@@ -319,31 +330,31 @@ class ReportWriter:
         plt.close('all')
 
 
-parameters = dict(input_point_cloud='C:/Users/seank/Documents/NDT Project/New South Wales/Site1Plot1.las',
-                  batch_size=18,  # If you get CUDA errors, lower this. This is suitable for 24 GB of vRAM.
-                  num_procs=10,  # Number of CPU cores you want to use.
-                  max_diameter=5,  # Maximum diameter setting. Any measurements greater than this are considered erroneous and are ignored.
-                  slice_thickness=0.2,  # default = 0.2
-                  slice_increment=0.05,  # default = 0.05
-                  slice_clustering_distance=0.1,  # default = 0.1
-                  cleaned_measurement_radius=0.18,
-                  subsample=True,
-                  subsampling_min_spacing=0.01,
-                  minimum_CCI=0.3,  # Minimum valid Circuferential Completeness Index (CCI) for non-interpolated circle/cylinder fitting. Any measurements with CCI below this are deleted.
-                  min_tree_volume=0.005,  # Measurements from trees with volume (m3) less than this are ignored in the outputs.
-                  ground_veg_cutoff_height=3,  # Any vegetation points below this height are considered to be understory and are not assigned to individual trees.
-                  veg_sorting_range=10,
-                  Site='',  # Enter the site name if you wish. Only used for report generation.
-                  PlotID='',  # Enter the plot name/ID if you wish. Only used for report generation.
-                  plot_centre=None,  # [X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the median XY coords of the point cloud.
-                  plot_radius=0,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
-                  plot_radius_buffer=3,  # See README.md  This is used for "Intelligent Plot Cropping Mode".
-                  UTM_zone_number=50,  # Self explanatory.
-                  UTM_zone_letter='',  # Self explanatory.
-                  UTM_is_north=False,   # If in the northern hemisphere, set this to True.
-                  filter_noise=0,
-                  low_resolution_point_cloud_hack_mode=0)  # See README.md for details. Dodgy hack that can be useful on low resolution point clouds. Approximately multiplies the number of points in the point cloud by this number.
-
-# parameters.update(other_parameters)
-
-ReportWriter(parameters)
+# parameters = dict(input_point_cloud='C:/Users/seank/Documents/NDT Project/New South Wales/Site1Plot1.las',
+#                   batch_size=18,  # If you get CUDA errors, lower this. This is suitable for 24 GB of vRAM.
+#                   num_procs=10,  # Number of CPU cores you want to use.
+#                   max_diameter=5,  # Maximum diameter setting. Any measurements greater than this are considered erroneous and are ignored.
+#                   slice_thickness=0.2,  # default = 0.2
+#                   slice_increment=0.05,  # default = 0.05
+#                   slice_clustering_distance=0.1,  # default = 0.1
+#                   cleaned_measurement_radius=0.18,
+#                   subsample=True,
+#                   subsampling_min_spacing=0.01,
+#                   minimum_CCI=0.3,  # Minimum valid Circuferential Completeness Index (CCI) for non-interpolated circle/cylinder fitting. Any measurements with CCI below this are deleted.
+#                   min_tree_volume=0.005,  # Measurements from trees with volume (m3) less than this are ignored in the outputs.
+#                   ground_veg_cutoff_height=3,  # Any vegetation points below this height are considered to be understory and are not assigned to individual trees.
+#                   veg_sorting_range=10,
+#                   Site='',  # Enter the site name if you wish. Only used for report generation.
+#                   PlotID='',  # Enter the plot name/ID if you wish. Only used for report generation.
+#                   plot_centre=None,  # [X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the median XY coords of the point cloud.
+#                   plot_radius=0,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
+#                   plot_radius_buffer=3,  # See README.md  This is used for "Intelligent Plot Cropping Mode".
+#                   UTM_zone_number=50,  # Self explanatory.
+#                   UTM_zone_letter='',  # Self explanatory.
+#                   UTM_is_north=False,   # If in the northern hemisphere, set this to True.
+#                   filter_noise=0,
+#                   low_resolution_point_cloud_hack_mode=0)  # See README.md for details. Dodgy hack that can be useful on low resolution point clouds. Approximately multiplies the number of points in the point cloud by this number.
+#
+# # parameters.update(other_parameters)
+#
+# ReportWriter(parameters)

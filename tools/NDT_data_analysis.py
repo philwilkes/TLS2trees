@@ -47,6 +47,15 @@ plots_to_compare = ['Leach P61',
                     'Denham_P257_TLS',
                     'Denham_P264_TLS']
 
+display_names = ['Leach P61 Photogrammetry',
+                 'Leach P111 Photogrammetry',
+                 'Denham P257 Photogrammetry',
+                 'Denham P264 Photogrammetry',
+                 'Leach P61 TLS',
+                 'Leach P111 TLS',
+                 'Denham P257 TLS',
+                 'Denham P264 TLS']
+
 ref_names_plots_to_compare = ['P61',
                               'P111',
                               'P257',
@@ -64,9 +73,6 @@ offsets = [[-1.257, -0.426],
            [0, 0],
            [0, 0],
            [0, 0]]
-
-
-
 
 
 def get_nearest_tree(reference_dataset, automatic_dataset, max_search_radius):
@@ -143,7 +149,7 @@ def get_nearest_tree(reference_dataset, automatic_dataset, max_search_radius):
     return sorted_trees_array, species_column
 
 
-for auto_plot, plot, offset in zip(plots_to_compare, ref_names_plots_to_compare, offsets):
+for auto_plot, plot, display_name, offset in zip(plots_to_compare, ref_names_plots_to_compare, display_names, offsets):
     try:
         directory = glob.glob('C:/Users/seank/Documents/NDT Project/Western Australia/*' + auto_plot + '*/')[0]
         print(directory, offset)
@@ -176,7 +182,7 @@ for auto_plot, plot, offset in zip(plots_to_compare, ref_names_plots_to_compare,
                              }
 
         fig1 = plt.figure(figsize=(12, 12))
-        fig1.suptitle("Plot " + plot, size=16)
+        fig1.suptitle(display_name, size=16)
         ax1 = fig1.add_subplot(2, 2, 1)
         ax1.set_title("Reference vs Automated DBH", fontsize=10)
         ax1.set_xlabel("Reference DBH (m)")
@@ -240,13 +246,13 @@ for auto_plot, plot, offset in zip(plots_to_compare, ref_names_plots_to_compare,
                  facecolor='green')
 
         fig1.show(False)
-        fig1.savefig(directory + plot + '_DBH_and_height_plot.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
-        fig1.savefig('C:/Users/seank/Documents/NDT Project/Western Australia/NDT_DATA/' + plot + '_DBH_and_height_plot.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
+        fig1.savefig(directory + display_name + '_DBH_and_height_plot.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
+        fig1.savefig('C:/Users/seank/Documents/NDT Project/Western Australia/NDT_DATA/' + display_name + '_DBH_and_height_plot.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
 
         matched_data = np.hstack((matched_data, np.array([species_column]).T))
         # pd.DataFrame(matched_data).to_csv(directory+'matched_tree_data.csv',header=[i for i in sorted_trees_dict],index=None,sep=',')
         pd.DataFrame(matched_data).to_csv(
-            'C:/Users/seank/Documents/NDT Project/Western Australia/NDT_DATA/' + plot + '_matched_tree_data.csv',
+            'C:/Users/seank/Documents/NDT Project/Western Australia/NDT_DATA/' + display_name + '_matched_tree_data.csv',
             header=[i for i in sorted_trees_dict], index=None, sep=',')
 
         kml = simplekml.Kml()
@@ -260,4 +266,4 @@ for auto_plot, plot, offset in zip(plots_to_compare, ref_names_plots_to_compare,
             kml.newpoint(name=str(tree_name), coords=[(tree_lon, tree_lat)], description=description)
         kml.save('C:/Users/seank/Documents/NDT Project/Western Australia/NDT_DATA/' + str(plot) + '.kml')
     except FileNotFoundError:
-        None
+        print("File not found.")

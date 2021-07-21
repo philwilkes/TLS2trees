@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 import matplotlib
 from matplotlib.patches import Circle, PathPatch
 from matplotlib import cm
-
+from tools import load_file
 plt.ioff()
 
 
@@ -26,11 +26,9 @@ def get_nearest_tree(reference_dataset, automatic_dataset, max_search_radius, re
     height_auto = automatic_dataset[:, auto_dict['Height']]
     dbh_auto = automatic_dataset[:, auto_dict['DBH']]
     vol_auto = automatic_dataset[:, auto_dict['Volume']]
-    # print(auto_dict['treeNo'])
-    # print(x_ref)
+
     reference_data_array = np.vstack((x_ref, y_ref, tree_id_ref, height_ref, dbh_ref, vol_ref)).T
     auto_data_array = np.vstack((x_auto, y_auto, tree_id_auto, height_auto, dbh_auto, vol_auto)).T
-    # print(auto_data_array.shape)
     sorted_trees_array = np.zeros((0, 13))
 
     if auto_data_array.shape[0] != 0:
@@ -83,13 +81,125 @@ def convert_coords_to_lat_long(easting, northing, point_name=None):
     return lat, lon, point_name
 
 
-reference_data_GT = pd.read_csv('../data/PFOlsen/green_triangle.csv')
-reference_data_WA = pd.read_csv('../data/PFOlsen/western_australia.csv')
+point_clouds = ['T1_class',
+                'T02_class',
+                'T3_class',
+                'T4_class',
+                'T05_class',
+                'T6_class',
+                'T7_class',
+                'T8_class',
+                'T9_class',
+                'T10_class',
+
+                'T11_class',
+                'T12_class',
+                'T13_class',
+                'T14_class',
+                'T15_class',
+                'T16_class',
+                'T017_class',
+                'T18_class',
+                'T19_class',
+                'T20_class',
+
+                'T21_class',
+                'T22_class',
+                'T23_class',
+                'T25_class',
+                'T26_class',
+                'T27_class',
+                'T28_class',
+                'TAPER29_class',
+                'TAPER30_class',
+
+                'TAPER31_class',
+                'TAPER32_class',
+                'TAPER33_class',
+                'TAPER34_class',
+                'TAPER35_class',
+                'TAPER36_class',
+                'TAPER37_class',
+                'TAPER38_class',
+                'TAPER39_class',
+                'TAPER40_class',
+
+                'TAPER41_class',
+                'TAPER42_class',
+                'TAPER43_class',
+                'TAPER44_class',
+                'TAPER45_class',
+                'TAPER46_class',
+                'TAPER47_class',
+                'TAPER48_class',
+                'TAPER49_class',
+                'TAPER50_class',
+                ]
+
+names = ['TAPER01',
+         'TAPER02',
+         'TAPER03',
+         'TAPER04',
+         'TAPER05',
+         'TAPER06',
+         'TAPER07',
+         'TAPER08',
+         'TAPER09',
+         'TAPER10',
+
+         'TAPER11',
+         'TAPER12',
+         'TAPER13',
+         'TAPER14',
+         'TAPER15',
+         'TAPER16',
+         'TAPER17',
+         'TAPER18',
+         'TAPER19',
+         'TAPER20',
+
+         'TAPER21',
+         'TAPER22',
+         'TAPER23',
+         'TAPER25',
+         'TAPER26',
+         'TAPER27',
+         'TAPER28',
+         'TAPER29',
+         'TAPER30',
+
+         'TAPER31',
+         'TAPER32',
+         'TAPER33',
+         'TAPER34',
+         'TAPER35',
+         'TAPER36',
+         'TAPER37',
+         'TAPER38',
+         'TAPER39',
+         'TAPER40',
+
+         'TAPER41',
+         'TAPER42',
+         'TAPER43',
+         'TAPER44',
+         'TAPER45',
+         'TAPER46',
+         'TAPER47',
+         'TAPER48',
+         'TAPER49',
+         'TAPER50']
+
+cyl_dict = dict(x=0, y=1, z=2, nx=3, ny=4, nz=5, radius=6, CCI=7, branch_id=8, parent_branch_id=9,
+                tree_id=10, segment_volume=11, segment_angle_to_horiz=12, height_above_dtm=13)
+
+reference_data_GT = pd.read_csv('E:/PFOlsen/green_triangle.csv')
+reference_data_WA = pd.read_csv('E:/PFOlsen/western_australia.csv')
 
 GT_tree_locations = pd.read_csv(
-    '../data/PFOlsen/PFOlsenPlots/greentriangle/04_Spatial/tree_locations_from_PFO/taper_tree_Location.csv')
+    'E:/PFOlsen/PFOlsenPlots/greentriangle/04_Spatial/tree_locations_from_PFO/taper_tree_Location.csv')
 WA_tree_locations = pd.read_csv(
-    '../data/PFOlsen/PFOlsenPlots/pfowesternaustralia/04_Spatial/tree_locations_from_PFO/TAPER_tree_locations.csv')
+    'E:/PFOlsen/PFOlsenPlots/pfowesternaustralia/04_Spatial/tree_locations_from_PFO/TAPER_tree_locations.csv')
 GT_tree_locations = np.array(GT_tree_locations)
 WA_tree_locations = np.array(WA_tree_locations)
 
@@ -129,15 +239,17 @@ for PlotId in np.unique(reference_data[:, ref_dict['PlotId']]):
 cylinders_per_plot_data = []
 fsct_trees_per_plot_data = []
 for PlotId in np.unique(reference_data[:, ref_dict['PlotId']]):
-    directory = '../data/postprocessed_point_clouds/' + str(PlotId) + '_class_1.0_cmDS_out/'
-    try:
-        # print(directory)
-        cylinders_per_plot_data.append(np.loadtxt(directory + 'cleaned_cyls.csv'))
-        df = pd.read_csv(directory + 'tree_data.csv')
-        df['PlotID'] = PlotId
-        fsct_trees_per_plot_data.append(df)
-    except:
-        None
+    directory = 'E:/PFOlsen/PFOlsenPlots/' + point_clouds[names.index(PlotId)] + '_FSCT_output/'
+    # print(PlotId, names.index(PlotId), point_clouds[names.index(PlotId)])
+
+    cyls, headers = load_file(directory + 'cleaned_cyls.las', headers_of_interest=list(cyl_dict))
+    cylinders_per_plot_data.append(cyls)
+
+    df = pd.read_csv(directory + 'tree_data.csv')
+    print(df.shape)
+    df['PlotID'] = PlotId
+    fsct_trees_per_plot_data.append(df)
+
 
 fsct_data_combined = pd.concat(fsct_trees_per_plot_data)
 auto_headings = list(fsct_data_combined.columns.values)
@@ -161,8 +273,11 @@ sorted_trees_dict = {'PlotId'      : 0,
 
 matched_data_all = np.zeros((0, 13))
 
+missing = [30, 35, 36, 39, 50]
+# 39 has one tree... the rest have plenty
+
 for plot in np.unique(reference_data[:, ref_dict['PlotId']]):
-    save_directory = '../data/PFOlsen/TAPER_PLOTS/'
+    save_directory = 'E:/PFOlsen/FSCT_OUTPUTS/'
     reference_plot = reference_data[reference_data[:, ref_dict['PlotId']] == plot]
     automatic_plot = fsct_data_combined[fsct_data_combined[:, auto_dict['PlotID']] == plot]
     if automatic_plot.shape[0] != 0:

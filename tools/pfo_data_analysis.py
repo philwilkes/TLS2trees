@@ -1,16 +1,73 @@
+import math
+import sys
+from copy import deepcopy
+from multiprocessing import get_context
+import networkx as nx
 import numpy as np
 import pandas as pd
 import simplekml
 import utm
-import glob
+import os
 from scipy import spatial
-from copy import deepcopy
+from scipy.spatial import ConvexHull
+from scipy.interpolate import CubicSpline
+from scipy.interpolate import griddata
+from skimage.measure import LineModelND, CircleModel, ransac
+from sklearn.cluster import DBSCAN
+from sklearn.neighbors import NearestNeighbors
+from sklearn.linear_model import RANSACRegressor
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.pipeline import make_pipeline
 from matplotlib import pyplot as plt
-import matplotlib
-from matplotlib.patches import Circle, PathPatch
-from matplotlib import cm
-from tools import load_file
+from tools import load_file, save_file, low_resolution_hack_mode, subsample_point_cloud, clustering
+import time
+import hdbscan
+from skspatial.objects import Plane
+import warnings
 plt.ioff()
+
+
+def get_taper(single_tree_cyls, slice_heights, increment):
+    """
+    Accepts single tree of cylinders and start height, stop height and increment.
+    From start height to stop height (relative to ground), extract the largest
+    diameter at a specific increment for that tree.
+
+    Returns:
+    slice_heights
+    List of slice heights.
+
+    diameters
+    List of diameters corresponding to slice heights.
+
+    """
+    cyl_dict = dict(x=0, y=1, z=2, nx=3, ny=4, nz=5, radius=6, CCI=7, branch_id=8, parent_branch_id=9,
+                    tree_id=10, segment_volume=11, segment_angle_to_horiz=12, height_above_dtm=13)
+
+    kdtree = spatial.cKDTree(np.atleast_2d(single_tree_cyls[:, cyl_dict['height_above_dtm']]).T)
+
+    diameters = []
+
+    for height in slice_heights:
+        results = single_tree_cyls[kdtree.query_ball_point([height], r=increment/2)]
+        if results.shape[0] > 0:
+            diameters.append(np.max(results[:, cyl_dict['radius']]))
+        else:
+            diameters.append(0)
+
+    return diameters
+
+
+def extract_tapers_from_plot(plot_cyls, cyl_dict, slice_heights, increment):
+    taper_array = np.zeros((0, 1 + slice_heights.shape[0]))
+
+    for tree_id in np.unique(plot_cyls[:, cyl_dict['tree_id']])[:10]:
+        individual_tree_cyls = plot_cyls[plot_cyls[:, cyl_dict['tree_id']] == tree_id]
+        # if individual_tree_cyls.shape[0] > 0:
+        diameters = get_taper(individual_tree_cyls, slice_heights, increment)
+        taper_array = np.vstack((taper_array, np.hstack((np.array([tree_id]), diameters))))
+
+    return taper_array
 
 
 def get_nearest_tree(reference_dataset, automatic_dataset, max_search_radius, ref_dict, auto_dict, sorted_trees_dict):
@@ -236,23 +293,62 @@ for PlotId in np.unique(reference_data[:, ref_dict['PlotId']]):
                                           reference_data[:, ref_dict['TreeNumber']] == TreeNumber), ref_dict[
                                'y_tree']] = row2[0, 3]
 
+
+cyl_dict = dict(x=0, y=1, z=2, nx=3, ny=4, nz=5, radius=6, CCI=7, branch_id=8, parent_branch_id=9,
+                tree_id=10, segment_volume=11, segment_angle_to_horiz=12, height_above_dtm=13)
+
+make_plots = False
+
+start_height = 0
+stop_height = 40
+increment = 0.5
+slice_heights = np.linspace(start_height, stop_height, int(np.ceil((stop_height - start_height) / increment) + 1))
+
+
+
+
 cylinders_per_plot_data = []
 fsct_trees_per_plot_data = []
 for PlotId in np.unique(reference_data[:, ref_dict['PlotId']]):
     directory = 'E:/PFOlsen/PFOlsenPlots/' + point_clouds[names.index(PlotId)] + '_FSCT_output/'
     # print(PlotId, names.index(PlotId), point_clouds[names.index(PlotId)])
 
-    cyls, headers = load_file(directory + 'cleaned_cyls.las', headers_of_interest=list(cyl_dict))
-    cylinders_per_plot_data.append(cyls)
+    cyls, headers = load_file(directory + 'cleaned_cyls.las', headers_of_interest=list(cyl_dict), silent=True)
+
+    # cylinders_per_plot_data.append(cyls)
+    tapers = extract_tapers_from_plot(cyls, cyl_dict, slice_heights, increment)
+    if make_plots:
+        fig1 = plt.figure(figsize=(15, 2))
+        fig1.show(False)
+        fig1.suptitle("Plot " + PlotId, size=16)
+        ax1 = fig1.add_subplot(1, 1, 1)
+        ax1.set_title("Reference vs Automated DBH", fontsize=10)
+        ax1.set_xlabel("Reference DBH (m)")
+        ax1.set_ylabel("Automated DBH (m)")
+        # ax1.axis('equal')
+        ax1.set_xlim([0, np.max(tapers[1:, 0])])
+        ax1.set_ylim([0, np.max(tapers[1:, 1:])])
+        for tree_id in np.unique(tapers[:, 0]):
+            tree = tapers[tapers[:, 0] == tree_id].T[1:]
+            print(slice_heights.shape, tree.shape)
+            x = np.atleast_2d(slice_heights).T[tree != 0]
+            y = tree[tree != 0]
+            print(x.shape, y.shape)
+            ax1.plot(x, y, linewidth=0.5)
+        fig1.savefig(directory + 'taper_plot.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
+        plt.close()
+
+    pd.DataFrame(tapers, columns=['TreeId'] + list(slice_heights)).to_csv(directory + 'tapers.csv', index=False)
 
     df = pd.read_csv(directory + 'tree_data.csv')
-    print(df.shape)
+    # print(df.shape)
     df['PlotID'] = PlotId
     fsct_trees_per_plot_data.append(df)
 
 
 fsct_data_combined = pd.concat(fsct_trees_per_plot_data)
 auto_headings = list(fsct_data_combined.columns.values)
+
 auto_dict = {i: auto_headings.index(i) for i in auto_headings}
 
 fsct_data_combined = np.array(fsct_data_combined)
@@ -273,92 +369,98 @@ sorted_trees_dict = {'PlotId'      : 0,
 
 matched_data_all = np.zeros((0, 13))
 
-missing = [30, 35, 36, 39, 50]
-# 39 has one tree... the rest have plenty
-
 for plot in np.unique(reference_data[:, ref_dict['PlotId']]):
     save_directory = 'E:/PFOlsen/FSCT_OUTPUTS/'
     reference_plot = reference_data[reference_data[:, ref_dict['PlotId']] == plot]
     automatic_plot = fsct_data_combined[fsct_data_combined[:, auto_dict['PlotID']] == plot]
+
+    # pd.DataFrame(reference_plot, columns=list(ref_dict)).to_csv(save_directory + 'reference_plot' + plot + '.csv')
+    # pd.DataFrame(automatic_plot, columns=list(auto_dict)).to_csv(save_directory + 'automatic_plot' + plot + '.csv')
+    # np.savetxt(save_directory + 'automatic_plot' + plot + '.csv', automatic_plot)
     if automatic_plot.shape[0] != 0:
         # print(reference_plot.shape,automatic_plot.shape)
         matched_data = get_nearest_tree(reference_plot, automatic_plot, max_search_radius=2, ref_dict=ref_dict,
                                         auto_dict=auto_dict, sorted_trees_dict=sorted_trees_dict)
+
         valid_dbh = matched_data[:, sorted_trees_dict['dbh_auto']] != 0
+        pd.DataFrame(matched_data, columns=list(sorted_trees_dict)).to_csv(save_directory + 'matched_data' + plot + '.csv')
+
         if np.sum(valid_dbh) > 0:
-            fig1 = plt.figure(figsize=(12, 12))
-            fig1.show(False)
-            fig1.suptitle("Plot " + plot, size=16)
-            ax1 = fig1.add_subplot(2, 2, 1)
-            ax1.set_title("Reference vs Automated DBH", fontsize=10)
-            ax1.set_xlabel("Reference DBH (m)")
-            ax1.set_ylabel("Automated DBH (m)")
-            ax1.axis('equal')
-            lim = np.max([np.max(matched_data[valid_dbh, sorted_trees_dict['dbh_ref']]),
-                          np.max(matched_data[valid_dbh, sorted_trees_dict['dbh_auto']])]) + 0.1
-            ax1.set_xlim([0, lim])
-            ax1.set_ylim([0, lim])
-            ax1.plot([0, lim], [0, lim], color='lightgrey', linewidth=0.5, )
-            ax1.scatter(matched_data[valid_dbh, sorted_trees_dict['dbh_ref']],
-                        matched_data[valid_dbh, sorted_trees_dict['dbh_auto']], s=30, marker='.')
+            if make_plots:
+                print(plot)
 
-            ax2 = fig1.add_subplot(2, 2, 2)
-            ax2.set_title("DBH Error Histogram", fontsize=10)
-            ax2.set_xlabel("DBH Error (m)")
-            ax2.set_ylabel("Frequency")
-            poslim = np.max(matched_data[valid_dbh, sorted_trees_dict['dbh_ref']] - matched_data[
-                valid_dbh, sorted_trees_dict['dbh_auto']])
-            neglim = abs(np.min(matched_data[valid_dbh, sorted_trees_dict['dbh_ref']] - matched_data[
-                valid_dbh, sorted_trees_dict['dbh_auto']]))
-            lim = np.around(np.max([neglim, poslim]), 3)
+                fig2 = plt.figure(figsize=(12, 12))
+                fig2.show(False)
+                fig2.suptitle("Plot " + plot, size=16)
+                ax1 = fig2.add_subplot(2, 2, 1)
+                ax1.set_title("Reference vs Automated DBH", fontsize=10)
+                ax1.set_xlabel("Reference DBH (m)")
+                ax1.set_ylabel("Automated DBH (m)")
+                ax1.axis('equal')
+                lim = np.max([np.max(matched_data[valid_dbh, sorted_trees_dict['dbh_ref']]),
+                              np.max(matched_data[valid_dbh, sorted_trees_dict['dbh_auto']])]) + 0.1
+                ax1.set_xlim([0, lim])
+                ax1.set_ylim([0, lim])
+                ax1.plot([0, lim], [0, lim], color='lightgrey', linewidth=0.5, )
+                ax1.scatter(matched_data[valid_dbh, sorted_trees_dict['dbh_ref']],
+                            matched_data[valid_dbh, sorted_trees_dict['dbh_auto']], s=30, marker='.')
 
-            # bins = np.linspace(-lim-0.05,lim+0.05,int(np.ceil(2*lim/0.01))+4)
-            # print(bins)
+                ax2 = fig2.add_subplot(2, 2, 2)
+                ax2.set_title("DBH Error Histogram", fontsize=10)
+                ax2.set_xlabel("DBH Error (m)")
+                ax2.set_ylabel("Frequency")
+                poslim = np.max(matched_data[valid_dbh, sorted_trees_dict['dbh_ref']] - matched_data[
+                    valid_dbh, sorted_trees_dict['dbh_auto']])
+                neglim = abs(np.min(matched_data[valid_dbh, sorted_trees_dict['dbh_ref']] - matched_data[
+                    valid_dbh, sorted_trees_dict['dbh_auto']]))
+                lim = np.around(np.max([neglim, poslim]), 3)
 
-            ax2.hist(matched_data[valid_dbh, sorted_trees_dict['dbh_ref']] - matched_data[
-                valid_dbh, sorted_trees_dict['dbh_auto']],
-                     # bins=bins,
-                     range=(-lim, lim),
-                     linewidth=0.5,
-                     edgecolor='black',
-                     facecolor='green',
-                     align='mid')
+                # bins = np.linspace(-lim-0.05,lim+0.05,int(np.ceil(2*lim/0.01))+4)
+                # print(bins)
 
-            ax3 = fig1.add_subplot(2, 2, 3)
-            ax3.set_title("Reference vs Automated Height", fontsize=10)
-            ax3.set_xlabel("Reference Height (m)")
-            ax3.set_ylabel("Automated Height (m)")
-            ax3.axis('equal')
-            lim = np.max([np.max(matched_data[:, sorted_trees_dict['height_ref']]),
-                          np.max(matched_data[:, sorted_trees_dict['height_auto']])]) + 0.1
-            ax3.set_xlim([0, lim])
-            ax3.set_ylim([0, lim])
-            ax3.plot([0, lim], [0, lim], color='lightgrey', linewidth=0.5, )
-            ax3.scatter(matched_data[:, sorted_trees_dict['height_ref']],
-                        matched_data[:, sorted_trees_dict['height_auto']], s=30, marker='.')
+                ax2.hist(matched_data[valid_dbh, sorted_trees_dict['dbh_ref']] - matched_data[
+                    valid_dbh, sorted_trees_dict['dbh_auto']],
+                         # bins=bins,
+                         range=(-lim, lim),
+                         linewidth=0.5,
+                         edgecolor='black',
+                         facecolor='green',
+                         align='mid')
 
-            ax4 = fig1.add_subplot(2, 2, 4)
-            ax4.set_title("Height Error Histogram", fontsize=10)
-            ax4.set_xlabel("Height Error (m)")
-            ax4.set_ylabel("Frequency")
-            poslim = np.max(
-                matched_data[:, sorted_trees_dict['height_ref']] - matched_data[:, sorted_trees_dict['height_auto']])
-            neglim = abs(np.min(
-                matched_data[:, sorted_trees_dict['height_ref']] - matched_data[:, sorted_trees_dict['height_auto']]))
-            lim = np.round(np.max([neglim, poslim]) / 2) * 2
-            bins = np.linspace(-lim - 2, lim + 2, int(np.ceil(2 * lim / 2)) + 4)
+                ax3 = fig2.add_subplot(2, 2, 3)
+                ax3.set_title("Reference vs Automated Height", fontsize=10)
+                ax3.set_xlabel("Reference Height (m)")
+                ax3.set_ylabel("Automated Height (m)")
+                ax3.axis('equal')
+                lim = np.max([np.max(matched_data[:, sorted_trees_dict['height_ref']]),
+                              np.max(matched_data[:, sorted_trees_dict['height_auto']])]) + 0.1
+                ax3.set_xlim([0, lim])
+                ax3.set_ylim([0, lim])
+                ax3.plot([0, lim], [0, lim], color='lightgrey', linewidth=0.5, )
+                ax3.scatter(matched_data[:, sorted_trees_dict['height_ref']],
+                            matched_data[:, sorted_trees_dict['height_auto']], s=30, marker='.')
 
-            ax4.hist(
-                matched_data[:, sorted_trees_dict['height_ref']] - matched_data[:, sorted_trees_dict['height_auto']],
-                bins=bins,
-                range=(-lim, lim),
-                linewidth=0.5,
-                edgecolor='black',
-                facecolor='green')
+                ax4 = fig2.add_subplot(2, 2, 4)
+                ax4.set_title("Height Error Histogram", fontsize=10)
+                ax4.set_xlabel("Height Error (m)")
+                ax4.set_ylabel("Frequency")
+                poslim = np.max(
+                    matched_data[:, sorted_trees_dict['height_ref']] - matched_data[:, sorted_trees_dict['height_auto']])
+                neglim = abs(np.min(
+                    matched_data[:, sorted_trees_dict['height_ref']] - matched_data[:, sorted_trees_dict['height_auto']]))
+                lim = np.round(np.max([neglim, poslim]) / 2) * 2
+                bins = np.linspace(-lim - 2, lim + 2, int(np.ceil(2 * lim / 2)) + 4)
 
-            fig1.savefig(save_directory + plot + '_DBH_and_height_plot.png', dpi=600, bbox_inches='tight',
-                         pad_inches=0.0)
-            plt.close()
+                ax4.hist(
+                    matched_data[:, sorted_trees_dict['height_ref']] - matched_data[:, sorted_trees_dict['height_auto']],
+                    bins=bins,
+                    range=(-lim, lim),
+                    linewidth=0.5,
+                    edgecolor='black',
+                    facecolor='green')
+                fig1.savefig(save_directory + plot + '_DBH_and_height_plot.png', dpi=600, bbox_inches='tight',
+                             pad_inches=0.0)
+                plt.close()
 
             matched_data_all = np.vstack((matched_data_all, matched_data))
 
@@ -366,7 +468,7 @@ matched_data = matched_data_all
 valid_dbh = matched_data[:, sorted_trees_dict['dbh_auto']] != 0
 valid_heights = matched_data[:, sorted_trees_dict['height_auto']] != 0
 
-if 1:
+if make_plots:
     fig1 = plt.figure(figsize=(12, 12))
     fig1.suptitle("Plot " + plot, size=16)
     ax1 = fig1.add_subplot(2, 2, 1)
@@ -396,7 +498,7 @@ if 1:
     # print(bins)
 
     ax2.hist(
-        matched_data[valid_dbh, sorted_trees_dict['dbh_ref']] - matched_data[valid_dbh, sorted_trees_dict['dbh_auto']],
+        matched_data[valid_dbh, sorted_trees_dict['dbh_auto']] - matched_data[valid_dbh, sorted_trees_dict['dbh_ref']],
         # bins=bins,
         range=(-lim, lim),
         linewidth=0.5,
@@ -428,13 +530,17 @@ if 1:
     lim = np.round(np.max([neglim, poslim]) / 2) * 2
     bins = np.linspace(-lim - 2, lim + 2, int(np.ceil(2 * lim / 2)) + 4)
 
-    ax4.hist(matched_data[valid_heights, sorted_trees_dict['height_ref']] - matched_data[
-        valid_heights, sorted_trees_dict['height_auto']],
+    ax4.hist(matched_data[valid_heights, sorted_trees_dict['height_auto']] - matched_data[
+        valid_heights, sorted_trees_dict['height_ref']],
              bins=bins,
              range=(-lim, lim),
              linewidth=0.5,
              edgecolor='black',
              facecolor='green')
+
+    fig1.savefig(save_directory + 'COMBINED_DBH_and_height_plot.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
+    plt.close()
+
 
 # for tree in matched_data:
 #     None

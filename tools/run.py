@@ -5,14 +5,12 @@ from report_writer import ReportWriter
 import glob
 import numpy as np
 from measure import MeasureTree
-# from test import MeasureTree
 import tkinter as tk
 import tkinter.filedialog as fd
 from other_parameters import other_parameters
 import glob
 import os
 import sys
-# sys.setrecursionlimit(10 ** 8)  # Can be necessary for dealing with large point clouds.
 
 
 if __name__ == '__main__':
@@ -121,7 +119,7 @@ if __name__ == '__main__':
                           Site='',  # Enter the site name if you wish. Only used for report generation.
                           PlotID='',  # Enter the plot name/ID if you wish. Only used for report generation.
                           plot_centre=None,  # [X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the median XY coords of the point cloud.
-                          plot_radius=0,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
+                          plot_radius=10,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
                           plot_radius_buffer=3,  # See README.md  This is used for "Intelligent Plot Cropping Mode".
                           UTM_zone_number=50,  # Self explanatory.
                           UTM_zone_letter='',  # Self explanatory.
@@ -130,37 +128,21 @@ if __name__ == '__main__':
                           low_resolution_point_cloud_hack_mode=0)  # See README.md for details. Dodgy hack that can be useful on low resolution point clouds. Approximately multiplies the number of points in the point cloud by this number.
 
         parameters.update(other_parameters)
-        # try:
-        # preprocessing = Preprocessing(parameters)
-        # preprocessing.preprocess_point_cloud()
-        # del preprocessing
-        #
-        # sem_seg = SemanticSegmentation(parameters)
-        # sem_seg.inference()
-        # del sem_seg
-        #
-        # object_1 = PostProcessing(parameters)
-        # object_1.process_point_cloud()
-        # del object_1
-        #
-        # measure1 = MeasureTree(parameters)
-        # measure1.run_measurement_extraction()
-        # del measure1
+        preprocessing = Preprocessing(parameters)
+        preprocessing.preprocess_point_cloud()
+        del preprocessing
+
+        sem_seg = SemanticSegmentation(parameters)
+        sem_seg.inference()
+        del sem_seg
+
+        object_1 = PostProcessing(parameters)
+        object_1.process_point_cloud()
+        del object_1
+
+        measure1 = MeasureTree(parameters)
+        measure1.run_measurement_extraction()
+        del measure1
 
         ReportWriter(parameters)
-
-        # except:
-        #     None
-
-        #
-        #     # creating/opening a file
-        #     f = open(str(logname)+"_error_log.txt", "a")
-        #
-        #     # writing in the file
-        #     f.write(str(point_cloud))
-        #     f.write(str(Argument))
-        #
-        #     # closing the file
-        #     f.close()
-
 

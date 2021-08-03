@@ -22,7 +22,7 @@ from math import sin, cos, pi
 import random
 import os
 from sklearn.neighbors import NearestNeighbors
-from tools import load_file, save_file, subsample_point_cloud, get_heights_above_DTM, clustering
+from tools import load_file, save_file, subsample_point_cloud, get_heights_above_DTM, cluster_dbscan
 from scipy.interpolate import griddata
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
@@ -47,7 +47,7 @@ class PostProcessing:
         self.label_index = self.headers_of_interest.index('label')
         self.point_cloud[:, self.label_index] = self.point_cloud[:, self.label_index] + 1  # index offset since noise_class was removed from inference.
 
-    def make_DTM(self, clustering_epsilon=0.3, min_cluster_points=250, smoothing_radius=1, crop_dtm=False):
+    def make_DTM(self, crop_dtm=False):
         print("Making DTM...")
         """
         This function will generate a Digital Terrain Model (DTM) based on the terrain labelled points.
@@ -73,7 +73,6 @@ class PostProcessing:
         for x in x_points:
             for y in y_points:
                 indices = []
-                # radius_coarse = self.parameters['coarse_grid_radius']
                 radius = self.parameters['fine_grid_resolution']
                 while len(indices) < 100:
 
@@ -82,7 +81,6 @@ class PostProcessing:
 
                 if len(indices) > 0:
                     z_points = self.terrain_points[indices, 2]
-                    # z_points = z_points[np.logical_and(z_points <= np.percentile(z_points, 70), z_points >= np.percentile(z_points, 30))]
                     z = np.median(z_points)
                     grid_points = np.vstack((grid_points, np.array([[x, y, z]])))  # np.array([[np.median(self.terrain_points[indices,0]),np.median(self.terrain_points[indices,1]),z]]) ))
 
@@ -96,20 +94,12 @@ class PostProcessing:
                     kdtree.query_ball_point(grid_points[:, :2], r=self.parameters['fine_grid_resolution'] * 5)]
             grid_points = grid_points[inds, :]
 
-        grid_points = clustering(grid_points, eps=self.parameters['fine_grid_resolution'] * 1.5, mode='DBSCAN')
+        grid_points = cluster_dbscan(grid_points, eps=self.parameters['fine_grid_resolution'] * 1.5)
         grid_points_keep = grid_points[grid_points[:, -1] == 0]
 
         grid = griddata((grid_points_keep[:, 0], grid_points_keep[:, 1]), grid_points_keep[:, 2], grid_points[:, 0:2], method='linear',
                         fill_value=np.median(grid_points_keep[:, 2]))
         grid_points[:, 2] = grid
-        #
-        # if smoothing_radius > 0:
-        #     kdtree2 = spatial.cKDTree(grid_points, leafsize=1000)
-        #     results = kdtree2.query_ball_point(grid_points, r=smoothing_radius)
-        #     smoothed_Z = np.zeros((0, 1))
-        #     for i in results:
-        #         smoothed_Z = np.vstack((smoothed_Z, np.nanmean(grid_points[i, 2])))
-        #     grid_points[:, 2] = np.squeeze(smoothed_Z)
 
         return grid_points
 

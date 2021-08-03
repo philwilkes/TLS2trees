@@ -1,5 +1,5 @@
-other_parameters = dict(directory='../',
-                        model_filename='../model/model.pth',
+# Don't change these unless you really understand what you are doing with them.
+other_parameters = dict(model_filename='../model/model.pth',
                         box_dimensions=[6, 6, 6],
                         box_overlap=[0.5, 0.5, 0.5],
                         min_points_per_box=1000,
@@ -19,6 +19,4 @@ other_parameters = dict(directory='../',
                         sorting_search_radius=1,
                         sorting_angle_tolerance=90,
                         max_search_radius=3,
-                        max_search_angle=30,
-                        run_from_start=1,
-                        )
+                        max_search_angle=30)

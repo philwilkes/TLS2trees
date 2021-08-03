@@ -18,7 +18,7 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.linear_model import RANSACRegressor
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import make_pipeline
-from tools import load_file, save_file, low_resolution_hack_mode, subsample_point_cloud, clustering
+from tools import load_file, save_file, low_resolution_hack_mode, subsample_point_cloud, clustering, cluster_hdbscan, cluster_dbscan
 import time
 import hdbscan
 from skspatial.objects import Plane
@@ -60,7 +60,7 @@ class MeasureTree:
 
         self.DTM, headers_of_interest = load_file(self.output_dir + 'DTM.las')
         if self.parameters['filter_noise']:
-            self.stem_points = self.noise_filtering(self.stem_points, min_neighbour_dist=0.03, min_neighbours=3)
+            self.stem_points = self.noise_filtering(self.stem_points, search_radius=0.03, min_neighbours=3)
         self.characters = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'dot', 'm', 'space', '_', '-', 'semiC',
                            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', '_M', 'N', 'O', 'P', 'Q', 'R',
                            'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
@@ -249,32 +249,40 @@ class MeasureTree:
         return points
 
     @classmethod
-    def rodrigues_rot(cls, P, n0, n1):
+    def rodrigues_rot(cls, points, vector1, vector2):
         """RODRIGUES ROTATION
         - Rotate given points based on a starting and ending vector
         - Axis k and angle of rotation theta given by vectors n0,n1
         P_rot = P*cos(theta) + (k x P)*sin(theta) + k*<k,P>*(1-cos(theta))"""
-        # If P is only 1d array (coords of single point), fix it to be matrix
-        if P.ndim == 1:
-            P = P[np.newaxis, :]
+        if points.ndim == 1:
+            points = points[np.newaxis, :]
 
-        # Get vector of rotation k and angle theta
-        n0 = n0 / np.linalg.norm(n0)
-        n1 = n1 / np.linalg.norm(n1)
-        k = np.cross(n0, n1)
+        vector1 = vector1 / np.linalg.norm(vector1)
+        vector2 = vector2 / np.linalg.norm(vector2)
+        k = np.cross(vector1, vector2)
         if np.sum(k) != 0:
             k = k / np.linalg.norm(k)
-        theta = np.arccos(np.dot(n0, n1))
+        theta = np.arccos(np.dot(vector1, vector2))
 
-        # Compute rotated points
-        P_rot = np.zeros((len(P), 3))
-        for i in range(len(P)):
-            P_rot[i] = P[i] * np.cos(theta) + np.cross(k, P[i]) * np.sin(theta) + k * np.dot(k, P[i]) * (
+        P_rot = np.zeros((len(points), 3))
+        for i in range(len(points)):
+            P_rot[i] = points[i] * np.cos(theta) + np.cross(k, points[i]) * np.sin(theta) + k * np.dot(k, points[i]) * (
                     1 - np.cos(theta))
         return P_rot
 
     @classmethod
     def fit_circle_3D(cls, points, V):
+        """
+        Fits a circle using Random Sample Consensus (RANSAC) to a set of points in a plane perpendicular to vector V.
+
+        Args:
+            points: Set of points to fit a circle to using RANSAC.
+            V: Axial vector of the cylinder you're fitting.
+
+        Returns:
+            cyl_output: numpy array of the format [[x, y, z, x_norm, y_norm, z_norm, radius, CCI, 0, 0, 0, 0, 0, 0]]
+        """
+
         CCI = 0
         r = 0
         P = points[:, :3]
@@ -314,7 +322,21 @@ class MeasureTree:
                                 r, CCI, 0, 0, 0, 0, 0, 0]])
         return cyl_output
 
-    def point_cloud_annotations(self, character_size, xpos, ypos, zpos, r, text):
+    def point_cloud_annotations(self, character_size, xpos, ypos, zpos, offset, text):
+        """
+        Point based text visualisation. Makes text viewable as a point cloud.
+
+        Args:
+            character_size:
+            xpos: x coord.
+            ypos: y coord.
+            zpos: z coord.
+            offset: Offset for the x coord. Used to shift the text depending on tree radius.
+            text: The text to be displayed.
+
+        Returns:
+            nx3 point cloud of the text.
+        """
         def convert_character_cells_to_points(character):
             character = np.rot90(character, axes=(1, 0))
             index_i = 0
@@ -351,11 +373,26 @@ class MeasureTree:
             text_points = np.hstack((text_points, np.array(get_character(str(i)))))
         points = convert_character_cells_to_points(text_points)
 
-        points = points * character_size + [xpos + 0.2 + 0.5 * r, ypos, zpos]
+        points = points * character_size + [xpos + 0.2 + 0.5 * offset, ypos, zpos]
         return points
 
     @classmethod
-    def fit_cylinder(cls, skeleton_points, point_cloud, num_neighbours, cyl_dict):
+    def fit_cylinder(cls, skeleton_points, point_cloud, num_neighbours):
+        """
+        Fits a 3D line to the skeleton points cluster provided.
+        Uses this line as the major axis/axial vector of the cylinder to be fitted.
+        Fits a series of circles perpendicular to this axis to the point cloud of this particular stem segment.
+
+        Args:
+            skeleton_points: A single cluster of skeleton points which should represent a segment of a tree/branch.
+            point_cloud: The cluster of points belonging to the segment of the branch.
+            num_neighbours: The number of skeleton points to use for fitting each circle in the segment. lower numbers
+                            have fewer points to fit a circle to, but higher numbers are negatively affected by curved
+                            branches. Recommend leaving this as it is.
+
+        Returns:
+            cyl_array: a numpy array based representation of the fitted circles/cylinders.
+        """
         point_cloud = point_cloud[:, :3]
         skeleton_points = skeleton_points[:, :3]
         cyl_array = np.zeros((0, 14))
@@ -390,10 +427,22 @@ class MeasureTree:
 
     @classmethod
     def cylinder_cleaning_multithreaded(cls, args):
+        """
+        Cylinder Cleaning
+        Works on a single tree worth of cylinders at a time.
+        Starts at the lowest (z axis) cylinder.
+        Finds neighbouring cylinders within "cleaned_measurement_radius".
+        If no neighbours are found, cylinder is deleted.
+        If neighbours are found, find the neighbour with the highest circumferential completeness index (CCI). This is
+        probably the most trustworthy cylinder in the neighbourhood.
+
+        If there are enough neighbours, use those with CCI >= the 30th percentile of CCIs in the neighbourhood.
+        Use the medians of x, y, vx, vy, vz, radius as the cleaned cylinder values.
+        Use the mean of the z coords of all neighbours for the cleaned cylinder z coord.
+        """
         sorted_cylinders, cleaned_measurement_radius, cyl_dict = args
         cleaned_cyls = np.zeros((0, np.shape(sorted_cylinders)[1]))
 
-        # Cleaning step
         while sorted_cylinders.shape[0] > 2:
             start_point_idx = np.argmin(sorted_cylinders[:, 2])
             start_point = sorted_cylinders[start_point_idx, :]
@@ -405,17 +454,13 @@ class MeasureTree:
             best_cylinder = start_point
             if neighbours.shape[0] > 0:
                 if np.max(neighbours[:, cyl_dict['CCI']]) > 0:
-                    best_cylinder = neighbours[np.argsort(neighbours[:, cyl_dict['CCI']])][-1]
-                if neighbours[neighbours[:, cyl_dict['CCI']] >= np.percentile(neighbours[:, cyl_dict['CCI']], 30),
-                   :2].shape[0] > 0:
-                    best_cylinder[:2] = np.median(neighbours[neighbours[:, cyl_dict['CCI']] >= np.percentile(
-                            neighbours[:, cyl_dict['CCI']], 30), :2], axis=0)
-                    best_cylinder[3:6] = np.median(neighbours[neighbours[:, cyl_dict['CCI']] >= np.percentile(
-                            neighbours[:, cyl_dict['CCI']], 30), 3:6], axis=0)
-                    best_cylinder[cyl_dict['radius']] = np.median(neighbours[
-                                                                      neighbours[:, cyl_dict['CCI']] >= np.percentile(
-                                                                              neighbours[:, cyl_dict['CCI']], 30),
-                                                                      cyl_dict['radius']])
+                    best_cylinder = neighbours[np.argsort(neighbours[:, cyl_dict['CCI']])][-1]  # choose cyl with highest CCI.
+
+                # compute 30th percentile of CCI in neighbourhood
+                pc30 = np.percentile(neighbours[:, cyl_dict['CCI']], 30)
+                if neighbours[neighbours[:, cyl_dict['CCI']] >= pc30, :2].shape[0] > 0:
+                    best_cylinder[[0, 1, 3, 4, 5, 6, 7]] = np.median(neighbours[neighbours[:, cyl_dict['CCI']] >= pc30, [0, 1, 3, 4, 5, 6, 7]], axis=0)
+                    # Set z coord to be the mean of all neighbours.
                     best_cylinder[2] = np.mean(neighbours[:, 2])
 
             cleaned_cyls = np.vstack((cleaned_cyls, best_cylinder))
@@ -423,39 +468,25 @@ class MeasureTree:
 
         return cleaned_cyls
 
-    def get_CCI_of_all_cyls(self, cyls):
-        kdtree = spatial.cKDTree(self.stem_points[:, :3])
-        i = 0
-        num_cyls = cyls.shape[0]
-        results = kdtree.query_ball_point(cyls[:, :3], r=cyls[:, self.cyl_dict['radius']] * 1.3)
-        nearby_stem_points_list = [self.stem_points[result] for result in results]
-        new_cyls = np.zeros((0, cyls.shape[1]))
-        for cyl, nearby_stem_points in zip(cyls, nearby_stem_points_list):
-            i += 1
-            if i % 50 == 0:
-                print(i, '/', num_cyls)
-            # Translate cylinders to have current cylinder at origin. Rotate all cylinders about new origin so current cylinder vector is up.
-            nearby_points_moved = self.rodrigues_rot(nearby_stem_points[:, :3] - cyl[:3], cyl[3:6], [0, 0, 1])
-            # Find all cylinders within 2D radius of the current cylinder.
-            # nearby_points_within_radius_mask = np.linalg.norm(nearby_points_moved[:,:2])<=cyl[self.cyl_dict['radius']]
-
-            # Find all cylinders within "slice_increment" of the current cylinder in the longitudinal direction.
-            nearby_points_within_thickness = np.abs(nearby_points_moved[:, 2]) < self.slice_increment
-
-            nearby_points = nearby_points_moved[nearby_points_within_thickness]
-            r = cyl[self.cyl_dict['radius']]
-            CCI = MeasureTree.circumferential_completeness_index([0, 0], r, nearby_points[:, :2])
-            cyl[self.cyl_dict['CCI']] = CCI
-            new_cyls = np.vstack((new_cyls, cyl))
-        return new_cyls
-
     @staticmethod
     def inside_conv_hull(point, hull, tolerance=1e-5):
+        """Checks if a point is inside a convex hull."""
         return all((np.dot(eq[:-1], point) + eq[-1] <= tolerance) for eq in hull.equations)
 
     # @staticmethod
     @classmethod
     def circumferential_completeness_index(cls, fitted_circle_centre, estimated_radius, slice_points):
+        """
+        Computes the Circumferential Completeness Index (CCI) of a fitted circle.
+
+        Args:
+            fitted_circle_centre: x, y coords of the circle centre
+            estimated_radius: circle radius
+            slice_points: the points the circle was fitted to
+
+        Returns:
+            CCI
+        """
         angular_region_degrees = 11
         minimum_radius_counted = estimated_radius * 0.7
         maximum_radius_counted = estimated_radius * 1.3
@@ -473,10 +504,12 @@ class MeasureTree:
         for angle in angles:
             if np.shape(np.where(theta[np.where(theta >= angle)] < (angle + angular_region_degrees)))[1] > 0:
                 completeness += 1
-        return completeness / num_sections
+        CCI = completeness / num_sections
+        return CCI
 
     @classmethod
     def threaded_cyl_fitting(cls, args):
+        """Helper function for multithreaded cylinder fitting."""
         skel_cluster, point_cluster, cluster_id, num_neighbours, cyl_dict = args
         cyl_array = np.zeros((0, 14))
         if skel_cluster.shape[0] > num_neighbours:
@@ -485,24 +518,20 @@ class MeasureTree:
         return cyl_array
 
     @staticmethod
-    def noise_filtering(points, min_neighbour_dist, min_neighbours):
-        kdtree = spatial.cKDTree(points[:, :3], leafsize=1000)
-        results = kdtree.query_ball_point(points[:, :3], r=min_neighbour_dist)
+    def noise_filtering(point_cloud, search_radius, min_neighbours):
+        """
+        Simple noise filtering function.
+        Checks how many neighbours are within min_neighbour_dist.
+        If there are greater than min_neighbours, keep the point.
+
+        Returns: filtered point cloud.
+        """
+        kdtree = spatial.cKDTree(point_cloud[:, :3], leafsize=1000)
+        results = kdtree.query_ball_point(point_cloud[:, :3], r=search_radius)
         if len(results) != 0:
-            return points[[len(i) >= min_neighbours for i in results]]
+            return point_cloud[[len(i) >= min_neighbours for i in results]]
         else:
-            return points
-
-    @staticmethod
-    def clustering(points, eps=0.05, min_samples=2, n_jobs=1, mode='DBSCAN'):
-        assert mode == 'DBSCAN' or mode == 'HDBSCAN'
-        if mode == 'HDBSCAN':
-            cluster_labels = hdbscan.HDBSCAN(min_cluster_size=100).fit_predict(points[:, :3])
-            return np.hstack((points, np.atleast_2d(cluster_labels).T))
-
-        elif mode == 'DBSCAN':
-            db = DBSCAN(eps=eps, min_samples=min_samples, metric='euclidean', algorithm='kd_tree', n_jobs=n_jobs).fit(points[:, :3])
-            return np.hstack((points, np.atleast_2d(db.labels_).T))
+            return point_cloud
 
     @classmethod
     def slice_clustering(cls, input_data):
@@ -510,29 +539,13 @@ class MeasureTree:
         medians = np.zeros((0, 3))
         new_slice, clustering_distance = input_data
         if new_slice.shape[0] > 1:
-            new_slice = clustering(new_slice[:, :3], mode='HDBSCAN')
+            new_slice = cluster_hdbscan(new_slice[:, :3])
             for cluster_id in range(0, int(np.max(new_slice[:, -1])) + 1):
                 cluster = new_slice[new_slice[:, -1] == cluster_id]
                 median = np.median(cluster[:, :3], axis=0)
                 medians = np.vstack((medians, median))
                 cluster_array_internal = np.vstack((cluster_array_internal, np.hstack((cluster[:, :3], np.zeros((cluster.shape[0], 3)) + median))))
         return cluster_array_internal, medians
-
-    #
-    # @classmethod
-    # def slice_clustering(cls, input_data):
-    #     cluster_array_internal = np.zeros((0, 6))
-    #     medians = np.zeros((0, 3))
-    #     new_slice, clustering_distance = input_data
-    #     if new_slice.shape[0] > 1:
-    #         new_slice = clustering(new_slice[:, :3], eps=clustering_distance)
-    #         for cluster_id in range(0, int(np.max(new_slice[:, -1])) + 1):
-    #             cluster = new_slice[new_slice[:, -1] == cluster_id]
-    #             median = np.median(cluster[:, :3], axis=0)
-    #             medians = np.vstack((medians, median))
-    #             cluster_array_internal = np.vstack(
-    #                     (cluster_array_internal, np.hstack((cluster[:, :3], np.zeros((cluster.shape[0], 3)) + median))))
-    #     return cluster_array_internal, medians
 
     @classmethod
     def within_angle_tolerances(cls, normal1, normal2, angle_tolerance):
@@ -632,7 +645,7 @@ class MeasureTree:
             # del clusteroutputlist, skeletonoutputlist
 
             print('Clustering skeleton...')
-            skeleton_array = clustering(skeleton_array[:, :3], eps=self.slice_increment * 1.5)  # TODO changed from 2 recheck
+            skeleton_array = cluster_dbscan(skeleton_array[:, :3], eps=self.slice_increment * 1.5)
             skeleton_cluster_visualisation = np.zeros((0, 5))
             for k in np.unique(skeleton_array[:, -1]):  # Just assigns random colours to the clusters to make it easier to see different neighbouring groups.
                 skeleton_cluster_visualisation = np.vstack((skeleton_cluster_visualisation, np.hstack((skeleton_array[skeleton_array[:, -1] == k], np.zeros((skeleton_array[skeleton_array[:, -1] == k].shape[0], 1)) + np.random.randint(0, 10)))))
@@ -944,7 +957,6 @@ class MeasureTree:
             print(self.assigned_vegetation_points[:, self.veg_dict['tree_id']].shape, self.subsampled_sorted_veg[indices, self.veg_dict['tree_id']].shape)
             self.assigned_vegetation_points[:, self.veg_dict['tree_id']] = np.atleast_2d(self.subsampled_sorted_veg[indices, self.veg_dict['tree_id']]).T
             self.unassigned_vegetation_points = self.assigned_vegetation_points[self.assigned_vegetation_points[:, self.veg_dict['tree_id']] == 0]
-
 
         print("Measuring canopy gap fraction...")
         veg_kdtree = spatial.cKDTree(self.vegetation_points[:, :2], leafsize=10000)

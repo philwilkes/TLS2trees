@@ -185,6 +185,17 @@ def get_heights_above_DTM(points, DTM):
     return points
 
 
+def cluster_dbscan(points, eps=0.05, min_samples=2, n_jobs=1):
+    db = DBSCAN(eps=eps, min_samples=min_samples, metric='euclidean', algorithm='kd_tree', n_jobs=n_jobs).fit(
+            points[:, :3])
+    return np.hstack((points, np.atleast_2d(db.labels_).T))
+
+
+def cluster_hdbscan(points):
+    cluster_labels = hdbscan.HDBSCAN(min_cluster_size=100).fit_predict(points[:, :3])
+    return np.hstack((points, np.atleast_2d(cluster_labels).T))
+
+
 def clustering(points, eps=0.05, min_samples=2, n_jobs=1, mode='DBSCAN'):
     # print("Clustering")
     assert mode == 'DBSCAN' or mode == 'HDBSCAN'

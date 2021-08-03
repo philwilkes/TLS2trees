@@ -17,7 +17,7 @@ class Preprocessing:
     def __init__(self, parameters):
         self.preprocessing_time_start = time.time()
         self.parameters = parameters
-        self.filename = self.parameters['input_point_cloud'].replace('\\', '/')
+        self.filename = self.parameters['point_cloud_filename'].replace('\\', '/')
         self.directory = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/'
         self.filename = self.filename.split('/')[-1]
         self.box_dimensions = np.array(self.parameters['box_dimensions'])

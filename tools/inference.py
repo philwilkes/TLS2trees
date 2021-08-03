@@ -68,7 +68,7 @@ class SemanticSegmentation:
         self.sem_seg_start_time = time.time()
         self.parameters = parameters
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.filename = self.parameters['input_point_cloud'].replace('\\', '/')
+        self.filename = self.parameters['point_cloud_filename'].replace('\\', '/')
         self.directory = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/'
         self.filename = self.filename.split('/')[-1]
         self.output_dir = self.directory + self.filename[:-4] + '_FSCT_output/'

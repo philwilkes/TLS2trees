@@ -31,7 +31,7 @@ class PostProcessing:
     def __init__(self, parameters):
         self.post_processing_time_start = time.time()
         self.parameters = parameters
-        self.filename = self.parameters['input_point_cloud'].replace('\\', '/')
+        self.filename = self.parameters['point_cloud_filename'].replace('\\', '/')
         self.output_dir = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/' + self.filename.split('/')[-1][:-4] + '_FSCT_output/'
         self.filename = self.filename.split('/')[-1]
 
@@ -66,18 +66,18 @@ class PostProcessing:
         ymin = np.floor(np.min(self.terrain_points[:, 1])) - 3
         xmax = np.ceil(np.max(self.terrain_points[:, 0])) + 3
         ymax = np.ceil(np.max(self.terrain_points[:, 1])) + 3
-        x_points = np.linspace(xmin, xmax, int(np.ceil((xmax - xmin) / self.parameters['fine_grid_resolution'])) + 1)
-        y_points = np.linspace(ymin, ymax, int(np.ceil((ymax - ymin) / self.parameters['fine_grid_resolution'])) + 1)
+        x_points = np.linspace(xmin, xmax, int(np.ceil((xmax - xmin) / self.parameters['grid_resolution'])) + 1)
+        y_points = np.linspace(ymin, ymax, int(np.ceil((ymax - ymin) / self.parameters['grid_resolution'])) + 1)
         grid_points = np.zeros((0, 3))
 
         for x in x_points:
             for y in y_points:
                 indices = []
-                radius = self.parameters['fine_grid_resolution']
+                radius = self.parameters['grid_resolution']
                 while len(indices) < 100:
 
                     indices = kdtree.query_ball_point([x, y], r=radius)
-                    radius += self.parameters['fine_grid_resolution']
+                    radius += self.parameters['grid_resolution']
 
                 if len(indices) > 0:
                     z_points = self.terrain_points[indices, 2]
@@ -91,10 +91,10 @@ class PostProcessing:
 
         elif crop_dtm:
             inds = [len(i) > 0 for i in
-                    kdtree.query_ball_point(grid_points[:, :2], r=self.parameters['fine_grid_resolution'] * 5)]
+                    kdtree.query_ball_point(grid_points[:, :2], r=self.parameters['grid_resolution'] * 5)]
             grid_points = grid_points[inds, :]
 
-        grid_points = cluster_dbscan(grid_points, eps=self.parameters['fine_grid_resolution'] * 1.5)
+        grid_points = cluster_dbscan(grid_points, eps=self.parameters['grid_resolution'] * 1.5)
         grid_points_keep = grid_points[grid_points[:, -1] == 0]
 
         grid = griddata((grid_points_keep[:, 0], grid_points_keep[:, 1]), grid_points_keep[:, 2], grid_points[:, 0:2], method='linear',
@@ -105,7 +105,7 @@ class PostProcessing:
 
     def process_point_cloud(self):
         self.terrain_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.terrain_class_label]  # -2 is now the class label as we added the height above DTM column.
-        self.DTM = self.make_DTM(smoothing_radius=3 * self.parameters['fine_grid_resolution'], crop_dtm=True)
+        self.DTM = self.make_DTM(crop_dtm=True)
         save_file(self.output_dir + 'DTM.las', self.DTM)
 
         if self.parameters['plot_radius'] is not None or self.parameters['plot_radius'] != 0:

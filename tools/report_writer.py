@@ -18,7 +18,7 @@ import warnings
 class ReportWriter:
     def __init__(self, parameters):
         self.parameters = parameters
-        self.filename = self.parameters['input_point_cloud'].replace('\\', '/')
+        self.filename = self.parameters['point_cloud_filename'].replace('\\', '/')
         self.output_dir = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/' + self.filename.split('/')[-1][:-4] + '_FSCT_output/'
         self.filename = self.filename.split('/')[-1]
         self.DTM, _ = load_file(self.output_dir + 'DTM.las')

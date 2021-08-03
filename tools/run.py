@@ -35,18 +35,20 @@ if __name__ == '__main__':
                           Site='',  # Enter the site name if you wish. Only used for report generation.
                           PlotID='',  # Enter the plot name/ID if you wish. Only used for report generation.
                           plot_centre=None,  # [X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the median XY coords of the point cloud.
-                          plot_radius=3,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
+                          plot_radius=5,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
                           plot_radius_buffer=0,  # See README.md  This is used for "Intelligent Plot Cropping Mode".
                           UTM_zone_number=50,
                           UTM_zone_letter='',
                           UTM_is_north=False,  # If in the northern hemisphere, set this to True.
                           filter_noise=0,
-                          low_resolution_point_cloud_hack_mode=0  # See README.md for details. Very ugly hack that can sometimes be useful on low resolution point clouds.
+                          low_resolution_point_cloud_hack_mode=0,  # See README.md for details. Very ugly hack that can sometimes be useful on low resolution point clouds.
+                          delete_working_directory=True  # Generally leave this on. Deletes the files used for segmentation after segmentation is finished.
+                                                         # You may wish to turn it off if you want to modify the segmentation code so you don't need to run pre-processing every time.
                           )
         parameters.update(other_parameters)
         FSCT(parameters=parameters,
-             preprocess=True,
-             segmentation=True,
-             postprocessing=True,
+             preprocess=0,
+             segmentation=0,
+             postprocessing=0,
              measure_plot=True,
              make_report=True)

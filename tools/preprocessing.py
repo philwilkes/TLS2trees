@@ -214,7 +214,7 @@ class Preprocessing:
         processing_report['Preprocessing Time (s)'] = self.preprocessing_time_total
         processing_report['Site'] = self.parameters['Site']
         processing_report['PlotID'] = self.parameters['PlotID']
-        processing_report['Point Cloud Filename'] = self.parameters['input_point_cloud']
+        processing_report['Point Cloud Filename'] = self.parameters['point_cloud_filename']
         processing_report['Plot Centre Northing'] = self.parameters['plot_centre'][0]
         processing_report['Plot Centre Easting'] = self.parameters['plot_centre'][1]
         processing_report['UTM Zone'] = str(self.parameters['UTM_zone_number']) + str(self.parameters['UTM_zone_letter'])

@@ -29,7 +29,7 @@ class MeasureTree:
     def __init__(self, parameters):
         self.measure_time_start = time.time()
         self.parameters = parameters
-        self.filename = self.parameters['input_point_cloud'].replace('\\', '/')
+        self.filename = self.parameters['point_cloud_filename'].replace('\\', '/')
         self.output_dir = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/' + self.filename.split('/')[-1][:-4] + '_FSCT_output/'
         self.filename = self.filename.split('/')[-1]
 
@@ -513,7 +513,7 @@ class MeasureTree:
         skel_cluster, point_cluster, cluster_id, num_neighbours, cyl_dict = args
         cyl_array = np.zeros((0, 14))
         if skel_cluster.shape[0] > num_neighbours:
-            cyl_array = cls.fit_cylinder(skel_cluster, point_cluster, num_neighbours=num_neighbours, cyl_dict=cyl_dict)
+            cyl_array = cls.fit_cylinder(skel_cluster, point_cluster, num_neighbours=num_neighbours)
             cyl_array[:, cyl_dict['branch_id']] = cluster_id
         return cyl_array
 
@@ -581,136 +581,134 @@ class MeasureTree:
         return points
 
     def run_measurement_extraction(self):
-        if self.parameters['run_from_start']:
+        skeleton_array = np.zeros((0, 3))
+        cluster_array = np.zeros((0, 6))
+        slice_heights = np.linspace(np.min(self.stem_points[:, 2]), np.max(self.stem_points[:, 2]), int(np.ceil(
+                (np.max(self.stem_points[:, 2]) - np.min(self.stem_points[:, 2])) / self.slice_increment)))
+        # input_data = []
+        print("Making and clustering slices...")
+        i = 0
+        max_i = slice_heights.shape[0]
+        for slice_height in slice_heights:
+            if i % 10 == 0:
+                # print ('{i}/{max_i}\r'.format(i,max_i),)
+                print('\r', i, '/', max_i, end='')
+            i += 1
+            # print('{:4.2f} m'.format(slice_height))
+            new_slice = self.stem_points[np.logical_and(self.stem_points[:, 2] >= slice_height, self.stem_points[:, 2] < slice_height + self.slice_thickness)]
+            if new_slice.shape[0] > 0:
+                cluster, skel = MeasureTree.slice_clustering([new_slice, self.parameters['slice_clustering_distance']])
+                skeleton_array = np.vstack((skeleton_array, skel))
+                cluster_array = np.vstack((cluster_array, cluster))
+                # input_data.append([new_slice, self.parameters['slice_clustering_distance']])
+                # np.savetxt(self.directory+'data/postprocessed_point_clouds/'+self.input_point_cloud+'/new_slice_'+str(i)+'.csv',new_slice)
+        print('\r', max_i, '/', max_i, end='')
+        print('\nDone\n')
 
-            skeleton_array = np.zeros((0, 3))
-            cluster_array = np.zeros((0, 6))
-            slice_heights = np.linspace(np.min(self.stem_points[:, 2]), np.max(self.stem_points[:, 2]), int(np.ceil(
-                    (np.max(self.stem_points[:, 2]) - np.min(self.stem_points[:, 2])) / self.slice_increment)))
-            # input_data = []
-            print("Making and clustering slices...")
-            i = 0
-            max_i = slice_heights.shape[0]
-            for slice_height in slice_heights:
-                if i % 10 == 0:
-                    # print ('{i}/{max_i}\r'.format(i,max_i),)
-                    print('\r', i, '/', max_i, end='')
-                i += 1
-                # print('{:4.2f} m'.format(slice_height))
-                new_slice = self.stem_points[np.logical_and(self.stem_points[:, 2] >= slice_height, self.stem_points[:, 2] < slice_height + self.slice_thickness)]
-                if new_slice.shape[0] > 0:
-                    cluster, skel = MeasureTree.slice_clustering([new_slice, self.parameters['slice_clustering_distance']])
-                    skeleton_array = np.vstack((skeleton_array, skel))
-                    cluster_array = np.vstack((cluster_array, cluster))
-                    # input_data.append([new_slice, self.parameters['slice_clustering_distance']])
-                    # np.savetxt(self.directory+'data/postprocessed_point_clouds/'+self.input_point_cloud+'/new_slice_'+str(i)+'.csv',new_slice)
-            print('\r', max_i, '/', max_i, end='')
-            print('\nDone\n')
+        # input_data = []
+        # print("Making slices...")
+        # i = 0
+        # max_i = slice_heights.shape[0]
+        # for slice_height in slice_heights:
+        #     if i % 10 == 0:
+        #         # print ('{i}/{max_i}\r'.format(i,max_i),)
+        #         print('\r', i, '/', max_i, end='')
+        #     i += 1
+        #     # print('{:4.2f} m'.format(slice_height))
+        #     new_slice = self.stem_points[np.logical_and(self.stem_points[:, 2] >= slice_height, self.stem_points[:,
+        #                                                                                         2] < slice_height + self.slice_thickness)]
+        #     if new_slice.shape[0] > 0:
+        #         input_data.append([new_slice, self.parameters['slice_clustering_distance']])
+        #         # np.savetxt(self.directory+'data/postprocessed_point_clouds/'+self.input_point_cloud+'/new_slice_'+str(i)+'.csv',new_slice)
+        # print('\r', max_i, '/', max_i, end='')
+        # print('\nDone\n')
+        #
+        # print("Starting multithreaded slice clustering...")
+        # j = 0
+        # max_j = len(input_data)
+        # clusteroutputlist = []
+        # skeletonoutputlist = []
+        # with get_context("spawn").Pool(processes=self.num_procs) as pool:
+        #     for i in pool.imap_unordered(MeasureTree.slice_clustering, input_data):
+        #         if j % 100 == 0:
+        #             print('\r', j, '/', max_j, end='')
+        #         j += 1
+        #         cluster, skel = i
+        #         clusteroutputlist.append(cluster)
+        #         skeletonoutputlist.append(skel)
+        # print('\r', max_j, '/', max_j, end='')
+        # print('\nDone\n')
+        # skeleton_array = np.vstack(skeletonoutputlist)
+        # cluster_array = np.vstack(clusteroutputlist)
+        # del clusteroutputlist, skeletonoutputlist
 
-            # input_data = []
-            # print("Making slices...")
-            # i = 0
-            # max_i = slice_heights.shape[0]
-            # for slice_height in slice_heights:
-            #     if i % 10 == 0:
-            #         # print ('{i}/{max_i}\r'.format(i,max_i),)
-            #         print('\r', i, '/', max_i, end='')
-            #     i += 1
-            #     # print('{:4.2f} m'.format(slice_height))
-            #     new_slice = self.stem_points[np.logical_and(self.stem_points[:, 2] >= slice_height, self.stem_points[:,
-            #                                                                                         2] < slice_height + self.slice_thickness)]
-            #     if new_slice.shape[0] > 0:
-            #         input_data.append([new_slice, self.parameters['slice_clustering_distance']])
-            #         # np.savetxt(self.directory+'data/postprocessed_point_clouds/'+self.input_point_cloud+'/new_slice_'+str(i)+'.csv',new_slice)
-            # print('\r', max_i, '/', max_i, end='')
-            # print('\nDone\n')
-            #
-            # print("Starting multithreaded slice clustering...")
-            # j = 0
-            # max_j = len(input_data)
-            # clusteroutputlist = []
-            # skeletonoutputlist = []
-            # with get_context("spawn").Pool(processes=self.num_procs) as pool:
-            #     for i in pool.imap_unordered(MeasureTree.slice_clustering, input_data):
-            #         if j % 100 == 0:
-            #             print('\r', j, '/', max_j, end='')
-            #         j += 1
-            #         cluster, skel = i
-            #         clusteroutputlist.append(cluster)
-            #         skeletonoutputlist.append(skel)
-            # print('\r', max_j, '/', max_j, end='')
-            # print('\nDone\n')
-            # skeleton_array = np.vstack(skeletonoutputlist)
-            # cluster_array = np.vstack(clusteroutputlist)
-            # del clusteroutputlist, skeletonoutputlist
+        print('Clustering skeleton...')
+        skeleton_array = cluster_dbscan(skeleton_array[:, :3], eps=self.slice_increment * 1.5)
+        skeleton_cluster_visualisation = np.zeros((0, 5))
+        for k in np.unique(skeleton_array[:, -1]):  # Just assigns random colours to the clusters to make it easier to see different neighbouring groups.
+            skeleton_cluster_visualisation = np.vstack((skeleton_cluster_visualisation, np.hstack((skeleton_array[skeleton_array[:, -1] == k], np.zeros((skeleton_array[skeleton_array[:, -1] == k].shape[0], 1)) + np.random.randint(0, 10)))))
 
-            print('Clustering skeleton...')
-            skeleton_array = cluster_dbscan(skeleton_array[:, :3], eps=self.slice_increment * 1.5)
-            skeleton_cluster_visualisation = np.zeros((0, 5))
-            for k in np.unique(skeleton_array[:, -1]):  # Just assigns random colours to the clusters to make it easier to see different neighbouring groups.
-                skeleton_cluster_visualisation = np.vstack((skeleton_cluster_visualisation, np.hstack((skeleton_array[skeleton_array[:, -1] == k], np.zeros((skeleton_array[skeleton_array[:, -1] == k].shape[0], 1)) + np.random.randint(0, 10)))))
+        print("Saving skeleton and cluster array...")
+        save_file(self.output_dir + 'skeleton_cluster_visualisation.las', skeleton_cluster_visualisation, ['X', 'Y', 'Z', 'cluster'])
 
-            print("Saving skeleton and cluster array...")
-            save_file(self.output_dir + 'skeleton_cluster_visualisation.las', skeleton_cluster_visualisation, ['X', 'Y', 'Z', 'cluster'])
+        print("Making kdtree...")
+        # Assign unassigned skeleton points to the nearest group.
+        unassigned_bool = skeleton_array[:, -1] == -1
+        kdtree = spatial.cKDTree(skeleton_array[unassigned_bool][:, :3], leafsize=100000)
+        distances, neighbours = kdtree.query(skeleton_array[unassigned_bool, :3], k=2)
+        skeleton_array[unassigned_bool, -1][distances[:, 1] < self.slice_increment * 3] = \
+            skeleton_array[unassigned_bool, -1][neighbours[:, 1]][distances[:, 1] < self.slice_increment * 3]
 
-            print("Making kdtree...")
-            # Assign unassigned skeleton points to the nearest group.
-            unassigned_bool = skeleton_array[:, -1] == -1
-            kdtree = spatial.cKDTree(skeleton_array[unassigned_bool][:, :3], leafsize=100000)
-            distances, neighbours = kdtree.query(skeleton_array[unassigned_bool, :3], k=2)
-            skeleton_array[unassigned_bool, -1][distances[:, 1] < self.slice_increment * 3] = \
-                skeleton_array[unassigned_bool, -1][neighbours[:, 1]][distances[:, 1] < self.slice_increment * 3]
+        input_data = []
+        i = 0
+        max_i = int(np.max(skeleton_array[:, -1]) + 1)
+        cl_kdtree = spatial.cKDTree(cluster_array[:, 3:], leafsize=100000)
+        cluster_ids = range(0, max_i)
+        print('Making initial branch/stem section clusters...')
 
-            input_data = []
-            i = 0
-            max_i = int(np.max(skeleton_array[:, -1]) + 1)
-            cl_kdtree = spatial.cKDTree(cluster_array[:, 3:], leafsize=100000)
-            cluster_ids = range(0, max_i)
-            print('Making initial branch/stem section clusters...')
+        # organised_clusters = np.zeros((0,5))
+        for cluster_id in cluster_ids:
+            if i % 100 == 0:
+                print('\r', i, '/', max_i, end='')
+            i += 1
+            skel_cluster = skeleton_array[skeleton_array[:, -1] == cluster_id, :3]
+            sc_kdtree = spatial.cKDTree(skel_cluster, leafsize=100000)
+            results = np.unique(np.hstack(sc_kdtree.query_ball_tree(cl_kdtree,
+                                                                    r=0.000000001)))  # handling some floating point errors that were giving me problems... dodgy? #TODO
+            cluster_array_clean = cluster_array[results, :3]
+            input_data.append([skel_cluster[:, :3], cluster_array_clean[:, :3], cluster_id, self.num_neighbours,
+                               self.cyl_dict])
+            # organised_clusters = np.vstack((organised_clusters,np.hstack((cluster_array_clean,
+            #                                                               np.ones((cluster_array_clean.shape[0],1))*i,
+            #                                                               np.ones((cluster_array_clean.shape[0],1))*np.random.randint(0,10)))  ))
+        print('\r', max_i, '/', max_i, end='')
+        print('\nDone\n')
 
-            # organised_clusters = np.zeros((0,5))
-            for cluster_id in cluster_ids:
-                if i % 100 == 0:
-                    print('\r', i, '/', max_i, end='')
-                i += 1
-                skel_cluster = skeleton_array[skeleton_array[:, -1] == cluster_id, :3]
-                sc_kdtree = spatial.cKDTree(skel_cluster, leafsize=100000)
-                results = np.unique(np.hstack(sc_kdtree.query_ball_tree(cl_kdtree,
-                                                                        r=0.000000001)))  # handling some floating point errors that were giving me problems... dodgy? #TODO
-                cluster_array_clean = cluster_array[results, :3]
-                input_data.append([skel_cluster[:, :3], cluster_array_clean[:, :3], cluster_id, self.num_neighbours,
-                                   self.cyl_dict])
-                # organised_clusters = np.vstack((organised_clusters,np.hstack((cluster_array_clean,
-                #                                                               np.ones((cluster_array_clean.shape[0],1))*i,
-                #                                                               np.ones((cluster_array_clean.shape[0],1))*np.random.randint(0,10)))  ))
-            print('\r', max_i, '/', max_i, end='')
-            print('\nDone\n')
+        # np.savetxt(self.directory+'data/postprocessed_point_clouds/'+self.input_point_cloud+'/organised_clusters.csv',organised_clusters)
 
-            # np.savetxt(self.directory+'data/postprocessed_point_clouds/'+self.input_point_cloud+'/organised_clusters.csv',organised_clusters)
+        print("Starting multithreaded cylinder fitting...")
+        j = 0
+        max_j = len(input_data)
+        # full_cyl_array = np.zeros((0, 14))
+        outputlist = []
+        with get_context("spawn").Pool(processes=self.num_procs) as pool:
+            for i in pool.imap_unordered(MeasureTree.threaded_cyl_fitting, input_data):
+                outputlist.append(i)
+                # full_cyl_array = np.vstack((full_cyl_array, i))
+                if j % 10 == 0:
+                    print('\r', j, '/', max_j, end='')
+                    # print(len(outputlist))
+                j += 1
+        full_cyl_array = np.vstack(outputlist)
+        print('\r', max_j, '/', max_j, end='')
+        print('\nDone\n')
 
-            print("Starting multithreaded cylinder fitting...")
-            j = 0
-            max_j = len(input_data)
-            # full_cyl_array = np.zeros((0, 14))
-            outputlist = []
-            with get_context("spawn").Pool(processes=self.num_procs) as pool:
-                for i in pool.imap_unordered(MeasureTree.threaded_cyl_fitting, input_data):
-                    outputlist.append(i)
-                    # full_cyl_array = np.vstack((full_cyl_array, i))
-                    if j % 10 == 0:
-                        print('\r', j, '/', max_j, end='')
-                        # print(len(outputlist))
-                    j += 1
-            full_cyl_array = np.vstack(outputlist)
-            print('\r', max_j, '/', max_j, end='')
-            print('\nDone\n')
+        print("Deleting cyls with CCI less than:", self.parameters['minimum_CCI'])
+        full_cyl_array = full_cyl_array[full_cyl_array[:, self.cyl_dict['CCI']] >= self.parameters['minimum_CCI']]
 
-            print("Deleting cyls with CCI less than:", self.parameters['minimum_CCI'])
-            full_cyl_array = full_cyl_array[full_cyl_array[:, self.cyl_dict['CCI']] >= self.parameters['minimum_CCI']]
-
-            # cyl_array = [x,y,z,nx,ny,nz,r,CCI,branch_id,tree_id,segment_volume,parent_branch_id]
-            print("Saving cylinder array...")
-            save_file(self.output_dir + 'full_cyl_array.las', full_cyl_array, headers_of_interest=list(self.cyl_dict))
+        # cyl_array = [x,y,z,nx,ny,nz,r,CCI,branch_id,tree_id,segment_volume,parent_branch_id]
+        print("Saving cylinder array...")
+        save_file(self.output_dir + 'full_cyl_array.las', full_cyl_array, headers_of_interest=list(self.cyl_dict))
         full_cyl_array, _ = load_file(self.output_dir + 'full_cyl_array.las',
                                       headers_of_interest=list(self.cyl_dict))
 

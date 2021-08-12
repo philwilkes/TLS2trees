@@ -18,7 +18,7 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.linear_model import RANSACRegressor
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import make_pipeline
-from tools import load_file, save_file, low_resolution_hack_mode, subsample_point_cloud, clustering, cluster_hdbscan, cluster_dbscan
+from tools import load_file, save_file, low_resolution_hack_mode, subsample_point_cloud, clustering, cluster_hdbscan, cluster_dbscan, get_heights_above_DTM
 import time
 import hdbscan
 from skspatial.objects import Plane
@@ -37,13 +37,14 @@ class MeasureTree:
         self.num_neighbours = parameters['num_neighbours']
         self.slice_thickness = parameters['slice_thickness']
         self.slice_increment = parameters['slice_increment']
-        self.min_tree_volume = parameters['min_tree_volume']
 
         self.processing_report = pd.read_csv(self.output_dir + 'processing_report.csv', index_col=False)
         self.parameters['plot_radius'] = float(self.processing_report['Plot Radius'])
         self.parameters['plot_radius_buffer'] = float(self.processing_report['Plot Radius Buffer'])
 
-        self.stem_points, headers_of_interest = load_file(self.output_dir + 'stem_points.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
+        self.stem_points, headers_of_interest = load_file(self.output_dir + 'stem_points.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label', 'height_above_DTM'])
+        self.stem_points = np.hstack((self.stem_points, np.zeros((self.stem_points.shape[0], 1))))
+
         print('stempoints', headers_of_interest)
         if self.parameters['low_resolution_point_cloud_hack_mode']:
             self.stem_points = low_resolution_hack_mode(self.stem_points,
@@ -52,15 +53,13 @@ class MeasureTree:
                                                         self.parameters['num_procs'])
             save_file(self.output_dir + self.filename[:-4] + '_stem_points_hack_mode_cloud.las', self.stem_points)
 
-        self.vegetation_points, headers_of_interest = load_file(self.output_dir + 'vegetation_points.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
-        self.vegetation_points = np.hstack((self.vegetation_points, np.zeros((self.vegetation_points.shape[0], 2))))
+        self.vegetation_points, headers_of_interest = load_file(self.output_dir + 'vegetation_points.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label', 'height_above_DTM'])
+        self.vegetation_points = np.hstack((self.vegetation_points, np.zeros((self.vegetation_points.shape[0], 1))))
         self.ground_veg = np.zeros((0, self.vegetation_points.shape[1]))
         self.terrain_points, headers_of_interest = load_file(self.output_dir + 'terrain_points.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
         self.cwd_points, headers_of_interest = load_file(self.output_dir + 'cwd_points.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
 
         self.DTM, headers_of_interest = load_file(self.output_dir + 'DTM.las')
-        if self.parameters['filter_noise']:
-            self.stem_points = self.noise_filtering(self.stem_points, search_radius=0.03, min_neighbours=3)
         self.characters = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'dot', 'm', 'space', '_', '-', 'semiC',
                            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', '_M', 'N', 'O', 'P', 'Q', 'R',
                            'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
@@ -72,8 +71,8 @@ class MeasureTree:
         self.cyl_dict = dict(x=0, y=1, z=2, nx=3, ny=4, nz=5, radius=6, CCI=7, branch_id=8, parent_branch_id=9,
                              tree_id=10, segment_volume=11, segment_angle_to_horiz=12, height_above_dtm=13)
 
-        self.veg_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, tree_id=6, height_above_dtm=7)
-        self.stem_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, tree_id=6, height_above_dtm=7)
+        self.veg_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, label=6, height_above_dtm=7, tree_id=8)
+        self.stem_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, label=6, height_above_dtm=7, tree_id=8)
 
         self.text_point_cloud = np.zeros((0, 3))
         self.tree_measurements = np.zeros((0, 8))
@@ -114,12 +113,12 @@ class MeasureTree:
         return interpolated
 
     def fix_outliers(self, tree_cylinders):
-        CCI_cond = tree_cylinders[:, self.cyl_dict['CCI']] > 0.3
-        threshold = np.percentile(tree_cylinders[CCI_cond, self.cyl_dict['radius']], 70)
-        dodgy_cylinders = tree_cylinders[tree_cylinders[:, self.cyl_dict['radius']] >= threshold]
-        kdtree = spatial.cKDTree(tree_cylinders[:, :3])
-        results = kdtree.query_ball_point(dodgy_cylinders[:, :3], r=dodgy_cylinders[:, self.cyl_dict['radius']] * 3)
-        tree_cylinders[tree_cylinders[:, self.cyl_dict['radius']] >= threshold, self.cyl_dict['radius']] = [np.median(tree_cylinders[result, self.cyl_dict['radius']]) for result in results]
+        radius_threshold = np.nanpercentile(tree_cylinders[:, self.cyl_dict['radius']], 70)
+        doubtful_cyl_mask = tree_cylinders[:, self.cyl_dict['radius']] > radius_threshold
+        neigh = NearestNeighbors(n_neighbors=2)
+        neigh.fit(tree_cylinders[np.logical_not(doubtful_cyl_mask), :3])
+        neighbour_list = neigh.kneighbors(tree_cylinders[doubtful_cyl_mask, :3], return_distance=False)
+        tree_cylinders[doubtful_cyl_mask, self.cyl_dict['radius']] = [np.median(tree_cylinders[np.logical_not(doubtful_cyl_mask), self.cyl_dict['radius']][indices]) for indices in neighbour_list]
         return tree_cylinders
 
     @classmethod
@@ -174,7 +173,7 @@ class MeasureTree:
             return abs((theta > 90) * 180 - theta) <= angle_tolerance
             # return theta<=angle_tolerance
 
-        def decision_tree(cyl1, cyl2, angle_tolerance, search_angle):
+        def criteria_check(cyl1, cyl2, angle_tolerance, search_angle):
             """
             Decides if cyl2 should be joined to cyl1 and if they are the same tree.
             angle_tolerance is the maximum angle between normal vectors of cylinders to be considered the same branch.
@@ -182,9 +181,13 @@ class MeasureTree:
             vector_array = cyl2[:, :3] - np.atleast_2d(cyl1[:3])
             condition1 = within_angle_tolerance(cyl1[3:6], cyl2[:, 3:6], angle_tolerance)
             condition2 = within_angle_tolerance(cyl1[3:6], vector_array, search_angle)
+            # condition3 = cyl2[:, self.cyl_dict['radius']] < cyl1[self.cyl_dict['radius']]*1.05
+            # cyl2[np.logical_and(condition1, condition2, condition3), self.cyl_dict['tree_id']] = cyl1[self.cyl_dict['tree_id']]
+            # cyl2[np.logical_and(condition1, condition2, condition3), self.cyl_dict['parent_branch_id']] = cyl1[self.cyl_dict['branch_id']]
             cyl2[np.logical_and(condition1, condition2), self.cyl_dict['tree_id']] = cyl1[self.cyl_dict['tree_id']]
             cyl2[np.logical_and(condition1, condition2), self.cyl_dict['parent_branch_id']] = cyl1[
                 self.cyl_dict['branch_id']]
+
             return cyl2
 
         max_tree_label = 1
@@ -210,10 +213,10 @@ class MeasureTree:
                                          unsorted_points[current_point_index + 1:]))
             kdtree = spatial.cKDTree(unsorted_points[:, :3], leafsize=1000)
             results = kdtree.query_ball_point(np.atleast_2d(current_point)[:, :3], r=distance_tolerance)[0]
-            unsorted_points[results] = decision_tree(current_point,
-                                                     unsorted_points[results],
-                                                     angle_tolerance,
-                                                     search_angle)
+            unsorted_points[results] = criteria_check(current_point,
+                                                      unsorted_points[results],
+                                                      angle_tolerance,
+                                                      search_angle)
         print('1.000\n')
         return sorted_points
 
@@ -306,12 +309,12 @@ class MeasureTree:
 
         elif P_xy.shape[0] >= 10 and P_xy.shape[0] < 20:
             model_robust, inliers = ransac(P_xy[:, :2], CircleModel, min_samples=7,
-                                           residual_threshold=0.4, max_trials=2500)
+                                           residual_threshold=0.3, max_trials=2500)
             xc, yc = model_robust.params[0:2]
             r = model_robust.params[2]
             CCI = MeasureTree.circumferential_completeness_index([xc, yc], r, P_xy[:, :2])
 
-        if CCI < 0.2:
+        if CCI < 0.3:
             r = 0
             xc, yc = np.mean(P_xy[:, :2], axis=0)
             CCI = 0
@@ -402,7 +405,7 @@ class MeasureTree:
 
         if skeleton_points.shape[0] <= num_neighbours:
             group = skeleton_points
-            line_centre = np.mean(group[:, :3], axis=0)
+            line_centre = np.mean([np.min(group[:, :3], axis=0), np.min(group[:, :3], axis=0)], axis=0)
             length = np.linalg.norm(np.max(group, axis=0) - np.min(group, axis=0))
             plane_slice = point_cloud[np.linalg.norm(abs(line_v_hat * (point_cloud - line_centre)), axis=1) < (
                         length / 2)]  # calculate distances to plane at centre of line.
@@ -456,12 +459,14 @@ class MeasureTree:
                 if np.max(neighbours[:, cyl_dict['CCI']]) > 0:
                     best_cylinder = neighbours[np.argsort(neighbours[:, cyl_dict['CCI']])][-1]  # choose cyl with highest CCI.
 
-                # compute 30th percentile of CCI in neighbourhood
-                pc30 = np.percentile(neighbours[:, cyl_dict['CCI']], 30)
-                if neighbours[neighbours[:, cyl_dict['CCI']] >= pc30, :2].shape[0] > 0:
-                    best_cylinder[[0, 1, 3, 4, 5, 6, 7]] = np.median(neighbours[neighbours[:, cyl_dict['CCI']] >= pc30, [0, 1, 3, 4, 5, 6, 7]], axis=0)
+                # compute 50th percentile of CCI in neighbourhood
+                percentile_thresh = np.percentile(neighbours[:, cyl_dict['CCI']], 50)
+                if neighbours[neighbours[:, cyl_dict['CCI']] >= percentile_thresh, :2].shape[0] > 0:
+                    best_cylinder[:3] = np.median(neighbours[neighbours[:, cyl_dict['CCI']] >= percentile_thresh, :3], axis=0)
+                    best_cylinder[3:6] = np.median(neighbours[neighbours[:, cyl_dict['CCI']] >= percentile_thresh, 3:6], axis=0)
+                    best_cylinder[cyl_dict['radius']] = np.median(neighbours[neighbours[:, cyl_dict['CCI']] >= percentile_thresh, cyl_dict['radius']], axis=0)
                     # Set z coord to be the mean of all neighbours.
-                    best_cylinder[2] = np.mean(neighbours[:, 2])
+                    # best_cylinder[2] = np.mean(neighbours[:, 2])
 
             cleaned_cyls = np.vstack((cleaned_cyls, best_cylinder))
             sorted_cylinders = np.delete(sorted_cylinders, results, axis=0)
@@ -473,7 +478,6 @@ class MeasureTree:
         """Checks if a point is inside a convex hull."""
         return all((np.dot(eq[:-1], point) + eq[-1] <= tolerance) for eq in hull.equations)
 
-    # @staticmethod
     @classmethod
     def circumferential_completeness_index(cls, fitted_circle_centre, estimated_radius, slice_points):
         """
@@ -487,24 +491,22 @@ class MeasureTree:
         Returns:
             CCI
         """
-        angular_region_degrees = 11
-        minimum_radius_counted = estimated_radius * 0.7
-        maximum_radius_counted = estimated_radius * 1.3
-        num_sections = 360 / angular_region_degrees
-        angles = np.linspace(-180, 180, num=int(num_sections), endpoint=False)
-        theta = np.zeros((1, 1))
-        completeness = 0
-        for point in slice_points:
-            if ((point[1] - fitted_circle_centre[1]) ** 2 + (
-                    point[0] - fitted_circle_centre[0]) ** 2) ** 0.5 >= minimum_radius_counted and (
-                    (point[1] - fitted_circle_centre[1]) ** 2 + (
-                    point[0] - fitted_circle_centre[0]) ** 2) ** 0.5 <= maximum_radius_counted:
-                theta = np.vstack((theta, (math.degrees(
-                        math.atan2((point[1] - fitted_circle_centre[1]), (point[0] - fitted_circle_centre[0]))))))
-        for angle in angles:
-            if np.shape(np.where(theta[np.where(theta >= angle)] < (angle + angular_region_degrees)))[1] > 0:
-                completeness += 1
-        CCI = completeness / num_sections
+        sector_angle = 18  # degrees
+        num_sections = int(np.ceil(360 / sector_angle))
+        sectors = np.linspace(-180, 180, num=num_sections, endpoint=False)
+
+        centre_vectors = slice_points[:, :2] - fitted_circle_centre
+        norms = np.linalg.norm(centre_vectors, axis=1)
+
+        centre_vectors = centre_vectors / np.atleast_2d(norms).T
+        centre_vectors = centre_vectors[np.logical_and(norms >= 0.7 * estimated_radius,
+                                                       norms <= 1.3 * estimated_radius)]
+
+        sector_vectors = np.vstack((np.cos(sectors), np.sin(sectors))).T
+        CCI = np.sum([np.any(
+            np.degrees(np.arccos(np.clip(np.einsum('ij,ij->i', np.atleast_2d(sector_vector), centre_vectors), -1, 1)))
+            < sector_angle / 2) for sector_vector in sector_vectors]) / num_sections
+
         return CCI
 
     @classmethod
@@ -517,27 +519,12 @@ class MeasureTree:
             cyl_array[:, cyl_dict['branch_id']] = cluster_id
         return cyl_array
 
-    @staticmethod
-    def noise_filtering(point_cloud, search_radius, min_neighbours):
-        """
-        Simple noise filtering function.
-        Checks how many neighbours are within min_neighbour_dist.
-        If there are greater than min_neighbours, keep the point.
-
-        Returns: filtered point cloud.
-        """
-        kdtree = spatial.cKDTree(point_cloud[:, :3], leafsize=1000)
-        results = kdtree.query_ball_point(point_cloud[:, :3], r=search_radius)
-        if len(results) != 0:
-            return point_cloud[[len(i) >= min_neighbours for i in results]]
-        else:
-            return point_cloud
-
     @classmethod
-    def slice_clustering(cls, input_data):
+    def slice_clustering(cls, new_slice):
+        """Helper function for clustering stem slices and extracting the skeletons of these stems."""
         cluster_array_internal = np.zeros((0, 6))
         medians = np.zeros((0, 3))
-        new_slice, clustering_distance = input_data
+
         if new_slice.shape[0] > 1:
             new_slice = cluster_hdbscan(new_slice[:, :3])
             for cluster_id in range(0, int(np.max(new_slice[:, -1])) + 1):
@@ -559,88 +546,36 @@ class MeasureTree:
 
     @classmethod
     def within_search_cone(cls, normal1, vector1_2, search_angle):
+        """Checks if the angle between vector1_2 and normal1 is less than search_angle."""
         norm1 = normal1 / np.linalg.norm(normal1)
         if not (vector1_2 == 0).all():
             norm2 = vector1_2 / np.linalg.norm(vector1_2)
-            dot = np.dot(norm1, norm2)
-            if dot > 1:  # floating point problems...
-                dot = 1
-            elif dot < -1:
-                dot = -1
-
+            dot = np.clip(np.dot(norm1, norm2), -1, 1)
             theta = math.degrees(np.arccos(dot))
-            # print('Cone Angle',abs((theta > 90)*180-theta) <= search_angle)
             return abs((theta > 90) * 180 - theta) <= search_angle
         else:
             return False
-
-    def get_heights_above_DTM(self, points):
-        grid = griddata((self.DTM[:, 0], self.DTM[:, 1]), self.DTM[:, 2], points[:, 0:2], method='linear',
-                        fill_value=np.median(self.DTM[:, 2]))
-        points[:, -1] = points[:, 2] - grid
-        return points
 
     def run_measurement_extraction(self):
         skeleton_array = np.zeros((0, 3))
         cluster_array = np.zeros((0, 6))
         slice_heights = np.linspace(np.min(self.stem_points[:, 2]), np.max(self.stem_points[:, 2]), int(np.ceil(
                 (np.max(self.stem_points[:, 2]) - np.min(self.stem_points[:, 2])) / self.slice_increment)))
-        # input_data = []
+
         print("Making and clustering slices...")
         i = 0
         max_i = slice_heights.shape[0]
         for slice_height in slice_heights:
             if i % 10 == 0:
-                # print ('{i}/{max_i}\r'.format(i,max_i),)
                 print('\r', i, '/', max_i, end='')
             i += 1
-            # print('{:4.2f} m'.format(slice_height))
             new_slice = self.stem_points[np.logical_and(self.stem_points[:, 2] >= slice_height, self.stem_points[:, 2] < slice_height + self.slice_thickness)]
             if new_slice.shape[0] > 0:
-                cluster, skel = MeasureTree.slice_clustering([new_slice, self.parameters['slice_clustering_distance']])
+                cluster, skel = MeasureTree.slice_clustering(new_slice)
                 skeleton_array = np.vstack((skeleton_array, skel))
                 cluster_array = np.vstack((cluster_array, cluster))
-                # input_data.append([new_slice, self.parameters['slice_clustering_distance']])
-                # np.savetxt(self.directory+'data/postprocessed_point_clouds/'+self.input_point_cloud+'/new_slice_'+str(i)+'.csv',new_slice)
         print('\r', max_i, '/', max_i, end='')
         print('\nDone\n')
-
-        # input_data = []
-        # print("Making slices...")
-        # i = 0
-        # max_i = slice_heights.shape[0]
-        # for slice_height in slice_heights:
-        #     if i % 10 == 0:
-        #         # print ('{i}/{max_i}\r'.format(i,max_i),)
-        #         print('\r', i, '/', max_i, end='')
-        #     i += 1
-        #     # print('{:4.2f} m'.format(slice_height))
-        #     new_slice = self.stem_points[np.logical_and(self.stem_points[:, 2] >= slice_height, self.stem_points[:,
-        #                                                                                         2] < slice_height + self.slice_thickness)]
-        #     if new_slice.shape[0] > 0:
-        #         input_data.append([new_slice, self.parameters['slice_clustering_distance']])
-        #         # np.savetxt(self.directory+'data/postprocessed_point_clouds/'+self.input_point_cloud+'/new_slice_'+str(i)+'.csv',new_slice)
-        # print('\r', max_i, '/', max_i, end='')
-        # print('\nDone\n')
-        #
-        # print("Starting multithreaded slice clustering...")
-        # j = 0
-        # max_j = len(input_data)
-        # clusteroutputlist = []
-        # skeletonoutputlist = []
-        # with get_context("spawn").Pool(processes=self.num_procs) as pool:
-        #     for i in pool.imap_unordered(MeasureTree.slice_clustering, input_data):
-        #         if j % 100 == 0:
-        #             print('\r', j, '/', max_j, end='')
-        #         j += 1
-        #         cluster, skel = i
-        #         clusteroutputlist.append(cluster)
-        #         skeletonoutputlist.append(skel)
-        # print('\r', max_j, '/', max_j, end='')
-        # print('\nDone\n')
-        # skeleton_array = np.vstack(skeletonoutputlist)
-        # cluster_array = np.vstack(clusteroutputlist)
-        # del clusteroutputlist, skeletonoutputlist
 
         print('Clustering skeleton...')
         skeleton_array = cluster_dbscan(skeleton_array[:, :3], eps=self.slice_increment * 1.5)
@@ -674,7 +609,7 @@ class MeasureTree:
             skel_cluster = skeleton_array[skeleton_array[:, -1] == cluster_id, :3]
             sc_kdtree = spatial.cKDTree(skel_cluster, leafsize=100000)
             results = np.unique(np.hstack(sc_kdtree.query_ball_tree(cl_kdtree,
-                                                                    r=0.000000001)))  # handling some floating point errors that were giving me problems... dodgy? #TODO
+                                                                    r=0.0001)))
             cluster_array_clean = cluster_array[results, :3]
             input_data.append([skel_cluster[:, :3], cluster_array_clean[:, :3], cluster_id, self.num_neighbours,
                                self.cyl_dict])
@@ -686,7 +621,7 @@ class MeasureTree:
 
         # np.savetxt(self.directory+'data/postprocessed_point_clouds/'+self.input_point_cloud+'/organised_clusters.csv',organised_clusters)
 
-        print("Starting multithreaded cylinder fitting...")
+        print("Starting multithreaded cylinder fitting... This can take a while.")
         j = 0
         max_j = len(input_data)
         # full_cyl_array = np.zeros((0, 14))
@@ -776,8 +711,7 @@ class MeasureTree:
                     t_id += 1
 
         save_file(self.output_dir + 'sorted_full_cyl_array.las', sorted_full_cyl_array, headers_of_interest=list(self.cyl_dict))
-        sorted_full_cyl_array, _ = load_file(self.output_dir + 'sorted_full_cyl_array.las',
-                                             headers_of_interest=list(self.cyl_dict))
+
         print("Cylinder interpolation...")
 
         tree_list = []
@@ -787,74 +721,77 @@ class MeasureTree:
             if int(tree_id) % 10 == 0:
                 print("Tree ID", int(tree_id), '/', int(max_tree_id))
             current_tree = sorted_full_cyl_array[sorted_full_cyl_array[:, self.cyl_dict['tree_id']] == tree_id]
-            interpolated_full_cyl_array = np.vstack((interpolated_full_cyl_array, current_tree))
-            _, individual_branches_indices = np.unique(current_tree[:, self.cyl_dict['branch_id']], return_index=True)
-            tree_list.append(nx.Graph())
-            for branch in current_tree[individual_branches_indices]:
-                branch_id = branch[self.cyl_dict['branch_id']]
-                parent_branch_id = branch[self.cyl_dict['parent_branch_id']]
-                tree_list[-1].add_edge(int(parent_branch_id), int(branch_id))
-                current_branch = current_tree[current_tree[:, self.cyl_dict['branch_id']] == branch_id]
-                parent_branch = current_tree[current_tree[:, self.cyl_dict['branch_id']] == parent_branch_id]
+            if current_tree.shape[0] >= self.parameters['min_tree_cyls']:
+                interpolated_full_cyl_array = np.vstack((interpolated_full_cyl_array, current_tree))
+                _, individual_branches_indices = np.unique(current_tree[:, self.cyl_dict['branch_id']], return_index=True)
+                tree_list.append(nx.Graph())
+                for branch in current_tree[individual_branches_indices]:
+                    branch_id = branch[self.cyl_dict['branch_id']]
+                    parent_branch_id = branch[self.cyl_dict['parent_branch_id']]
+                    tree_list[-1].add_edge(int(parent_branch_id), int(branch_id))
+                    current_branch = current_tree[current_tree[:, self.cyl_dict['branch_id']] == branch_id]
+                    parent_branch = current_tree[current_tree[:, self.cyl_dict['branch_id']] == parent_branch_id]
 
-                current_branch_copy = deepcopy(current_branch[np.argsort(current_branch[:, 2])])
-                while current_branch_copy.shape[0] > 1:
-                    lowest_point = current_branch_copy[0]
-                    current_branch_copy = current_branch_copy[1:]
-                    # find nearest point. if nearest point > increment size, interpolate.
-                    distances = np.abs(np.linalg.norm(current_branch_copy[:, :3] - lowest_point[:3], axis=1))
-                    if distances[distances > 0].shape[0] > 0:
-                        if np.min(distances[distances > 0]) > self.slice_increment:
-                            interp_to_point = current_branch_copy[distances > 0]
-                            if interp_to_point.shape[0] > 0:
-                                interp_to_point = interp_to_point[np.argmin(distances[distances > 0])]
+                    current_branch_copy = deepcopy(current_branch[np.argsort(current_branch[:, 2])])
+                    while current_branch_copy.shape[0] > 1:
+                        lowest_point = current_branch_copy[0]
+                        current_branch_copy = current_branch_copy[1:]
+                        # find nearest point. if nearest point > increment size, interpolate.
+                        distances = np.abs(np.linalg.norm(current_branch_copy[:, :3] - lowest_point[:3], axis=1))
+                        if distances[distances > 0].shape[0] > 0:
+                            if np.min(distances[distances > 0]) > self.slice_increment:
+                                interp_to_point = current_branch_copy[distances > 0]
+                                if interp_to_point.shape[0] > 0:
+                                    interp_to_point = interp_to_point[np.argmin(distances[distances > 0])]
 
-                            # Interpolates a single branch.
-                            if interp_to_point.shape[0] > 0:
-                                interpolated_cyls = self.interpolate_cyl(interp_to_point, lowest_point,
-                                                                         resolution=self.slice_increment)
-                                current_branch = np.vstack((current_branch, interpolated_cyls))
-                                interpolated_full_cyl_array = np.vstack(
-                                        (interpolated_full_cyl_array, interpolated_cyls))
+                                # Interpolates a single branch.
+                                if interp_to_point.shape[0] > 0:
+                                    interpolated_cyls = self.interpolate_cyl(interp_to_point, lowest_point,
+                                                                             resolution=self.slice_increment)
+                                    current_branch = np.vstack((current_branch, interpolated_cyls))
+                                    interpolated_full_cyl_array = np.vstack(
+                                            (interpolated_full_cyl_array, interpolated_cyls))
 
-                if parent_branch.shape[0] > 0:
-                    parent_centre = np.mean(parent_branch[:, :3])
-                    closest_point_index = np.argmin(np.linalg.norm(parent_centre - current_branch[:, :3]))
-                    closest_point_of_current_branch = current_branch[closest_point_index]
-                    kdtree = spatial.cKDTree(parent_branch[:, :3])
-                    parent_points_in_range = parent_branch[
-                        kdtree.query_ball_point(closest_point_of_current_branch[:3], r=max_search_radius)]
-                    lowest_point_of_current_branch = current_branch[np.argmin(current_branch[:, 2])]
-                    if parent_points_in_range.shape[0] > 0:
-                        angles = MeasureTree.compute_angle(lowest_point_of_current_branch[3:6],
-                                                           lowest_point_of_current_branch[:3] - parent_points_in_range[:, :3])
-                        angles = angles[angles <= max_search_angle]
+                    if parent_branch.shape[0] > 0:
+                        parent_centre = np.mean(parent_branch[:, :3])
+                        closest_point_index = np.argmin(np.linalg.norm(parent_centre - current_branch[:, :3]))
+                        closest_point_of_current_branch = current_branch[closest_point_index]
+                        kdtree = spatial.cKDTree(parent_branch[:, :3])
+                        parent_points_in_range = parent_branch[
+                            kdtree.query_ball_point(closest_point_of_current_branch[:3], r=max_search_radius)]
+                        lowest_point_of_current_branch = current_branch[np.argmin(current_branch[:, 2])]
+                        if parent_points_in_range.shape[0] > 0:
+                            angles = MeasureTree.compute_angle(lowest_point_of_current_branch[3:6],
+                                                               lowest_point_of_current_branch[:3] - parent_points_in_range[:, :3])
+                            angles = angles[angles <= max_search_angle]
 
-                        if angles.shape[0] > 0:
-                            best_parent_point = parent_points_in_range[np.argmin(angles)]
-                            # Interpolates from lowest point of current branch to smallest angle parent point.
-                            interpolated_full_cyl_array = np.vstack((interpolated_full_cyl_array, self.interpolate_cyl(
-                                    lowest_point_of_current_branch, best_parent_point,
-                                    resolution=self.slice_increment)))
-            current_tree = self.get_heights_above_DTM(current_tree)
-            lowest_10_measured_tree_points = deepcopy(current_tree[np.argsort(current_tree[:, -1])][:10])
-            lowest_measured_tree_point = np.median(lowest_10_measured_tree_points, axis=0)
-            tree_base_point = deepcopy(current_tree[np.argmin(current_tree[:, self.cyl_dict['height_above_dtm']])])
-            tree_base_point[2] = tree_base_point[2] - tree_base_point[self.cyl_dict['height_above_dtm']]
+                            if angles.shape[0] > 0:
+                                best_parent_point = parent_points_in_range[np.argmin(angles)]
+                                # Interpolates from lowest point of current branch to smallest angle parent point.
+                                interpolated_full_cyl_array = np.vstack((interpolated_full_cyl_array, self.interpolate_cyl(
+                                        lowest_point_of_current_branch, best_parent_point,
+                                        resolution=self.slice_increment)))
+                current_tree = get_heights_above_DTM(current_tree, self.DTM)
+                lowest_10_measured_tree_points = deepcopy(current_tree[np.argsort(current_tree[:, -1])][:10])
+                lowest_measured_tree_point = np.median(lowest_10_measured_tree_points, axis=0)
+                tree_base_point = deepcopy(current_tree[np.argmin(current_tree[:, self.cyl_dict['height_above_dtm']])])
+                tree_base_point[2] = tree_base_point[2] - tree_base_point[self.cyl_dict['height_above_dtm']]
 
-            interpolated_to_ground = self.interpolate_cyl(lowest_measured_tree_point, tree_base_point,
-                                                          resolution=self.slice_increment)
-            interpolated_full_cyl_array = np.vstack((interpolated_full_cyl_array, interpolated_to_ground))
+                interpolated_to_ground = self.interpolate_cyl(lowest_measured_tree_point, tree_base_point,
+                                                              resolution=self.slice_increment)
+                interpolated_full_cyl_array = np.vstack((interpolated_full_cyl_array, interpolated_to_ground))
 
         v1 = interpolated_full_cyl_array[:, 3:6]
         v2 = np.vstack((interpolated_full_cyl_array[:, 3],
                         interpolated_full_cyl_array[:, 4],
                         np.zeros((interpolated_full_cyl_array.shape[0])))).T
         interpolated_full_cyl_array[:, self.cyl_dict['segment_angle_to_horiz']] = self.compute_angle(v1, v2)
-        interpolated_full_cyl_array = self.get_heights_above_DTM(interpolated_full_cyl_array)
+        interpolated_full_cyl_array = get_heights_above_DTM(interpolated_full_cyl_array, self.DTM)
 
-        print("Cylinder Cleaning...")
+        save_file(self.output_dir + 'interpolated_full_cyl_array.las', interpolated_full_cyl_array, headers_of_interest=list(self.cyl_dict))
+        interpolated_full_cyl_array, _ = load_file(self.output_dir + 'interpolated_full_cyl_array.las', headers_of_interest=list(self.cyl_dict))
 
+        print("Cylinder Outlier Removal...")
         input_data = []
         i = 0
         tree_id_list = np.unique(interpolated_full_cyl_array[:, self.cyl_dict['tree_id']])
@@ -872,7 +809,7 @@ class MeasureTree:
         print('\r', max_tree_id, '/', max_tree_id, end='')
         print('\nDone\n')
 
-        print("Starting multithreaded cylinder cleaning...")
+        print("Starting multithreaded cylinder cleaning/smoothing...")
         j = 0
         max_j = len(input_data)
 
@@ -892,69 +829,18 @@ class MeasureTree:
         save_file(self.output_dir + 'cleaned_cyls.las', cleaned_cyls,
                   headers_of_interest=list(self.cyl_dict))
 
-        max_angle = 30
-        self.vegetation_points = self.get_heights_above_DTM(self.vegetation_points)
-        self.ground_veg = self.vegetation_points[self.vegetation_points[:, self.veg_dict['height_above_dtm']] <= self.parameters['ground_veg_cutoff_height']]
-        save_file(self.output_dir + 'ground_veg.las', self.ground_veg, headers_of_interest=list(self.veg_dict))
-
-        self.vegetation_points = self.vegetation_points[self.vegetation_points[:, self.veg_dict['height_above_dtm']] > self.parameters['ground_veg_cutoff_height']]
-        self.assigned_vegetation_points = np.zeros((0, self.vegetation_points.shape[1]))
-        self.subsampled_sorted_veg = np.zeros((0, self.vegetation_points.shape[1]))
-        self.vegetation_points_subsampled = subsample_point_cloud(self.vegetation_points, min_spacing=0.1, num_procs=self.parameters['num_procs'])
-        stem_kdtree = spatial.cKDTree(cleaned_cyls[:, :2], leafsize=1000)
-        results = stem_kdtree.query_ball_point(self.vegetation_points_subsampled[:, :2], r=self.parameters['veg_sorting_range'])
-
-        i = 0
         print("Sorting vegetation...")
-        for result in results:
-            veg_point = self.vegetation_points_subsampled[i, :]
-            nearby_cyls = cleaned_cyls[result]
-            vector_array_1 = nearby_cyls[:, :3] - veg_point[:3]
-            distances_2d = np.atleast_2d(np.linalg.norm(vector_array_1[:, :2], axis=1)).T
-            vector_array_1 = vector_array_1/np.atleast_2d(np.linalg.norm(vector_array_1, axis=1)).T
-            vector_array_2 = nearby_cyls[:, 3:6]
+        # Remove understorey vegetation and save it.
+        ground_veg_mask = self.vegetation_points[:, self.veg_dict['height_above_dtm']] <= self.parameters['ground_veg_cutoff_height']
+        self.ground_veg = self.vegetation_points[ground_veg_mask]
+        save_file(self.output_dir + 'ground_veg.las', self.ground_veg, headers_of_interest=list(self.veg_dict))
+        self.vegetation_points = self.vegetation_points[np.logical_not(ground_veg_mask)]
 
-            vector_array_1[vector_array_1[:, 2] < 0, 2] = vector_array_1[vector_array_1[:, 2] < 0, 2] * -1
-            vector_array_2[vector_array_2[:, 2] < 0, 2] = vector_array_2[vector_array_2[:, 2] < 0, 2] * -1
-            angle_bool = self.compute_angle(vector_array_1, vector_array_2) <= max_angle
-
-            if np.sum(angle_bool) != 0:
-                best_tree_id = nearby_cyls[angle_bool][np.argmin(distances_2d[angle_bool]), self.cyl_dict['tree_id']]
-                veg_point[self.veg_dict["tree_id"]] = best_tree_id
-                self.subsampled_sorted_veg = np.vstack((self.subsampled_sorted_veg, np.atleast_2d(veg_point)))
-            i += 1
-
-        if self.subsampled_sorted_veg.shape[0] < 2:
-            max_angle = 60
-            i = 0
-            print("Sorting vegetation...")
-            for result in results:
-                veg_point = self.vegetation_points_subsampled[i, :]
-                nearby_cyls = cleaned_cyls[result]
-                vector_array_1 = nearby_cyls[:, :3] - veg_point[:3]
-                distances_2d = np.atleast_2d(np.linalg.norm(vector_array_1[:, :2], axis=1)).T
-                vector_array_1 = vector_array_1 / np.atleast_2d(np.linalg.norm(vector_array_1, axis=1)).T
-                vector_array_2 = nearby_cyls[:, 3:6]
-
-                vector_array_1[vector_array_1[:, 2] < 0, 2] = vector_array_1[vector_array_1[:, 2] < 0, 2] * -1
-                vector_array_2[vector_array_2[:, 2] < 0, 2] = vector_array_2[vector_array_2[:, 2] < 0, 2] * -1
-                angle_bool = self.compute_angle(vector_array_1, vector_array_2) <= max_angle
-
-                if np.sum(angle_bool) != 0:
-                    best_tree_id = nearby_cyls[angle_bool][
-                        np.argmin(distances_2d[angle_bool]), self.cyl_dict['tree_id']]
-                    veg_point[self.veg_dict["tree_id"]] = best_tree_id
-                    self.subsampled_sorted_veg = np.vstack((self.subsampled_sorted_veg, np.atleast_2d(veg_point)))
-                i += 1
-
-        if self.subsampled_sorted_veg.shape[0] >= 2:
-            neighbours = NearestNeighbors(n_neighbors=1, algorithm='kd_tree', metric='euclidean', radius=0.15).fit(self.subsampled_sorted_veg[:, :3])
-            _, indices = neighbours.kneighbors(self.vegetation_points[:, :3])
-            self.assigned_vegetation_points = self.vegetation_points
-            print(self.assigned_vegetation_points.shape, self.subsampled_sorted_veg.shape)
-            print(self.assigned_vegetation_points[:, self.veg_dict['tree_id']].shape, self.subsampled_sorted_veg[indices, self.veg_dict['tree_id']].shape)
-            self.assigned_vegetation_points[:, self.veg_dict['tree_id']] = np.atleast_2d(self.subsampled_sorted_veg[indices, self.veg_dict['tree_id']]).T
-            self.unassigned_vegetation_points = self.assigned_vegetation_points[self.assigned_vegetation_points[:, self.veg_dict['tree_id']] == 0]
+        # Simple nearest neighbours vegetation sorting.
+        neighbours = NearestNeighbors(n_neighbors=1, algorithm='kd_tree', metric='euclidean',
+                                      radius=self.parameters['veg_sorting_range']).fit(cleaned_cyls[:, :2])
+        _, indices = neighbours.kneighbors(self.vegetation_points[:, :2])
+        self.vegetation_points[:, self.veg_dict['tree_id']] = np.atleast_2d(cleaned_cyls[indices, self.cyl_dict['tree_id']]).T
 
         print("Measuring canopy gap fraction...")
         veg_kdtree = spatial.cKDTree(self.vegetation_points[:, :2], leafsize=10000)
@@ -990,7 +876,6 @@ class MeasureTree:
 
         stem_points_sorted = np.zeros((0, len(list(self.stem_dict))))
         veg_points_sorted = np.zeros((0, len(list(self.veg_dict))))
-        tree_kd_tree = spatial.cKDTree(self.stem_points[:, :3])
         canopy_density_kd_tree = spatial.cKDTree(self.canopy_density[:, :2])
 
         tree_data_dict = dict(Site=0, PlotID=1, treeNo=2, x_tree_base=3, y_tree_base=4, z_tree_base=5, DBH=6, Height=7,
@@ -1006,12 +891,15 @@ class MeasureTree:
             intelligent_plot_cropping = True
 
         cleaned_cylinders = np.zeros((0, cleaned_cyls.shape[1]))
+        if self.parameters['sort_stems']:
+            cyl_neighbours = NearestNeighbors(n_neighbors=1, algorithm='kd_tree', metric='euclidean',
+                                              radius=self.parameters['stem_sorting_range']).fit(cleaned_cyls[:, :3])
         for tree_id in np.unique(cleaned_cyls[:, self.cyl_dict['tree_id']]):
             tree = cleaned_cyls[cleaned_cyls[:, self.cyl_dict['tree_id']] == tree_id]
-            tree_vegetation = self.assigned_vegetation_points[self.assigned_vegetation_points[:, self.veg_dict['tree_id']] == tree_id]
+            tree_vegetation = self.vegetation_points[self.vegetation_points[:, self.veg_dict['tree_id']] == tree_id]
             combined = np.vstack((tree[:, :3], tree_vegetation[:, :3]))
             combined = np.hstack((combined, np.zeros((combined.shape[0], 1))))
-            combined = self.get_heights_above_DTM(combined)
+            combined = get_heights_above_DTM(combined, self.DTM)
 
             # Get highest point of tree. Note, there is usually noise, so we use the 95th percentile.
             tree_max_point = combined[abs(combined[:, 2] - np.percentile(combined[:, 2], 95, interpolation='nearest')).argmin()]
@@ -1023,14 +911,12 @@ class MeasureTree:
             tree_height = tree_max_point[-1]
             del combined
 
-            radii = 2 * tree[:, self.cyl_dict['radius']]
-            results = tree_kd_tree.query_ball_point(tree[:, :3], r=radii)
-            results = np.unique(np.hstack(results))
-            tree_points = self.stem_points[np.asarray(results, dtype='int')]
+            # Simple nearest neighbours stem_points sorting.
+            if self.parameters['sort_stems']:
+                _, indices = cyl_neighbours.kneighbors(self.stem_points[:, :3])
+                self.stem_points[:, self.stem_dict['tree_id']] = np.atleast_2d(cleaned_cyls[indices, self.cyl_dict['tree_id']]).T
 
-            tree_points = np.hstack((tree_points, np.zeros((tree_points.shape[0], 2))))
-            tree_points = self.get_heights_above_DTM(tree_points)
-            tree_points[:, self.stem_dict['tree_id']] = tree_id
+            tree_points = self.stem_points[self.stem_points[:, self.stem_dict['tree_id']] == tree_id]
             base_northing = tree[np.argmin(tree[:, 2]), 0]
             base_easting = tree[np.argmin(tree[:, 2]), 1]
             DBH_slice = tree[np.logical_and(tree[:, self.cyl_dict['height_above_dtm']] >= 1.0,
@@ -1095,10 +981,7 @@ class MeasureTree:
                                                          '          HEIGHT: ' + str(np.around(tree_height, 2)) + 'm')
                     line3 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height,
                                                          DBH_Z - 3 * line_height, DBH * 0.5,
-                                                         '          VOLUME: ' + str(np.around(volume, 2)) + 'm')
-                    line4 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 4 * line_height,
-                                                         DBH_Z - 4 * line_height, DBH * 0.5, '    CHECK VOLUME: ' + str(
-                            np.around((np.pi * (0.5 * DBH) ** 2) * tree_height, 2)) + 'm')  # TODO RECHECK and delete.
+                                                         '          VOLUME: ' + str(np.around(volume, 2)) + 'm3')
 
                     height_measurement_line = self.points_along_line(x_tree_base, y_tree_base, z_tree_base, x_tree_base,
                                                                      y_tree_base, z_tree_base + tree_height,
@@ -1110,33 +993,34 @@ class MeasureTree:
                     if intelligent_plot_cropping:
                         if np.linalg.norm(np.array([x_tree_base, y_tree_base]) - np.array(plot_centre)) < self.parameters['plot_radius']:
                             tree_data = np.vstack((tree_data, this_trees_data))
-                            stem_points_sorted = np.vstack((stem_points_sorted, tree_points))
+                            if self.parameters['sort_stems']:
+                                stem_points_sorted = np.vstack((stem_points_sorted, tree_points))
                             veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
                             cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
-                            self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3, line4,
+                            self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3,
                                                                height_measurement_line, dbh_circle_points))
 
                     else:
                         tree_data = np.vstack((tree_data, this_trees_data))
-                        stem_points_sorted = np.vstack((stem_points_sorted, tree_points))
+                        if self.parameters['sort_stems']:
+                            stem_points_sorted = np.vstack((stem_points_sorted, tree_points))
                         veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
                         cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
-                        self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3, line4,
+                        self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3,
                                                            height_measurement_line, dbh_circle_points))
 
         save_file(self.output_dir + 'text_point_cloud.las', self.text_point_cloud)
-        save_file(self.output_dir + 'stem_points_sorted.las', stem_points_sorted, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'tree_id', 'height_above_DTM'])
-        save_file(self.output_dir + 'veg_points_sorted.las', veg_points_sorted, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'tree_id', 'height_above_DTM'])
+        if self.parameters['sort_stems']:
+            save_file(self.output_dir + 'stem_points_sorted.las', stem_points_sorted, headers_of_interest=list(self.stem_dict))
+        save_file(self.output_dir + 'veg_points_sorted.las', veg_points_sorted, headers_of_interest=list(self.veg_dict))
 
         if 1:
             print("Making cleaned cylinder visualisation...")
             j = 0
             cleaned_cyl_vis = []
             max_j = np.shape(cleaned_cylinders)[0]
-            # interpolated_cyl_vis = np.zeros((0,9))
             with get_context("spawn").Pool(processes=self.num_procs) as pool:
                 for i in pool.imap_unordered(self.make_cyl_visualisation, cleaned_cylinders):
-                    # interpolated_cyl_vis = np.vstack((interpolated_cyl_vis,i))
                     cleaned_cyl_vis.append(i)
                     if j % 100 == 0:
                         print('\r', j, '/', max_j, end='')

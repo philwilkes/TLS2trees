@@ -844,7 +844,6 @@ class MeasureTree:
         y_points = np.linspace(ymin, ymax, int(np.ceil((ymax - ymin) / self.parameters['Vegetation_coverage_resolution'])) + 1)
 
         convexhull = spatial.ConvexHull(self.DTM[:, :2])
-        self.canopy_density = np.zeros((0, 4))
         self.ground_area = 0
         self.canopy_area = 0
         self.ground_veg_area = 0
@@ -860,14 +859,11 @@ class MeasureTree:
 
                     if len(ground_veg_indices) > 5:
                         self.ground_veg_area += 1
-                        self.canopy_density = np.vstack((self.canopy_density, np.array([[x, y, 0, len(indices)]])))
 
         print(self.canopy_area, self.ground_area, "Canopy Gap Fraction:", self.canopy_area / self.ground_area)
-        np.savetxt(self.output_dir + 'canopy_density.csv', self.canopy_density)
 
         stem_points_sorted = np.zeros((0, len(list(self.stem_dict))))
         veg_points_sorted = np.zeros((0, len(list(self.veg_dict))))
-        canopy_density_kd_tree = spatial.cKDTree(self.canopy_density[:, :2])
 
         tree_data_dict = dict(Site=0, PlotID=1, treeNo=2, x_tree_base=3, y_tree_base=4, z_tree_base=5, DBH=6, Height=7,
                               Volume=8, Crown_mean_x=9, Crown_mean_y=10, Crown_top_x=11, Crown_top_y=12, Crown_top_z=13,
@@ -926,10 +922,8 @@ class MeasureTree:
             y_tree_base = base_easting
             mean_vegetation_density_in_5m_radius = 0
             mean_understory_height_in_5m_radius = 0
-            canopy_density_points = self.canopy_density[canopy_density_kd_tree.query_ball_point([DBH_X, DBH_Y], r=5)]
             nearby_understory_points = self.ground_veg[ground_veg_kdtree.query_ball_point([DBH_X, DBH_Y], r=5)]
-            if canopy_density_points.shape[0] > 0:
-                mean_vegetation_density_in_5m_radius = np.around(np.nanmean(canopy_density_points[:, 2]), 2)
+
             if nearby_understory_points.shape[0] > 0:
                 mean_understory_height_in_5m_radius = np.around(np.nanmean(nearby_understory_points[:, self.veg_dict['height_above_dtm']]), 2)
             if tree.shape[0] > 0:

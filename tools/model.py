@@ -1,4 +1,3 @@
-from abc import ABC
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn import knn_interpolate
@@ -20,7 +19,7 @@ from matplotlib.animation import FuncAnimation
 from torch.optim.lr_scheduler import ExponentialLR
 
 
-class SAModule(torch.nn.Module, ABC):
+class SAModule(torch.nn.Module):
     def __init__(self, ratio, r, NN):
         super(SAModule, self).__init__()
         self.ratio = ratio
@@ -37,7 +36,7 @@ class SAModule(torch.nn.Module, ABC):
         return x, pos, batch
 
 
-class GlobalSAModule(torch.nn.Module, ABC):
+class GlobalSAModule(torch.nn.Module):
     def __init__(self, NN):
         super(GlobalSAModule, self).__init__()
         self.NN = NN
@@ -57,7 +56,7 @@ def MLP(channels, batch_norm=True):
     ])
 
 
-class FPModule(torch.nn.Module, ABC):
+class FPModule(torch.nn.Module):
     def __init__(self, k, NN):
         super(FPModule, self).__init__()
         self.k = k
@@ -71,7 +70,7 @@ class FPModule(torch.nn.Module, ABC):
         return x, pos_skip, batch_skip
 
 
-class Net(torch.nn.Module, ABC):
+class Net(torch.nn.Module):
     def __init__(self, num_classes):
         super(Net, self).__init__()
         # idea why this isn't working... too many points?

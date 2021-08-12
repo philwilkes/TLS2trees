@@ -465,8 +465,6 @@ class MeasureTree:
                     best_cylinder[:3] = np.median(neighbours[neighbours[:, cyl_dict['CCI']] >= percentile_thresh, :3], axis=0)
                     best_cylinder[3:6] = np.median(neighbours[neighbours[:, cyl_dict['CCI']] >= percentile_thresh, 3:6], axis=0)
                     best_cylinder[cyl_dict['radius']] = np.median(neighbours[neighbours[:, cyl_dict['CCI']] >= percentile_thresh, cyl_dict['radius']], axis=0)
-                    # Set z coord to be the mean of all neighbours.
-                    # best_cylinder[2] = np.mean(neighbours[:, 2])
 
             cleaned_cyls = np.vstack((cleaned_cyls, best_cylinder))
             sorted_cylinders = np.delete(sorted_cylinders, results, axis=0)
@@ -583,8 +581,8 @@ class MeasureTree:
         for k in np.unique(skeleton_array[:, -1]):  # Just assigns random colours to the clusters to make it easier to see different neighbouring groups.
             skeleton_cluster_visualisation = np.vstack((skeleton_cluster_visualisation, np.hstack((skeleton_array[skeleton_array[:, -1] == k], np.zeros((skeleton_array[skeleton_array[:, -1] == k].shape[0], 1)) + np.random.randint(0, 10)))))
 
-        print("Saving skeleton and cluster array...")
-        save_file(self.output_dir + 'skeleton_cluster_visualisation.las', skeleton_cluster_visualisation, ['X', 'Y', 'Z', 'cluster'])
+        # print("Saving skeleton and cluster array...")
+        # save_file(self.output_dir + 'skeleton_cluster_visualisation.las', skeleton_cluster_visualisation, ['X', 'Y', 'Z', 'cluster'])
 
         print("Making kdtree...")
         # Assign unassigned skeleton points to the nearest group.
@@ -613,26 +611,19 @@ class MeasureTree:
             cluster_array_clean = cluster_array[results, :3]
             input_data.append([skel_cluster[:, :3], cluster_array_clean[:, :3], cluster_id, self.num_neighbours,
                                self.cyl_dict])
-            # organised_clusters = np.vstack((organised_clusters,np.hstack((cluster_array_clean,
-            #                                                               np.ones((cluster_array_clean.shape[0],1))*i,
-            #                                                               np.ones((cluster_array_clean.shape[0],1))*np.random.randint(0,10)))  ))
+
         print('\r', max_i, '/', max_i, end='')
         print('\nDone\n')
-
-        # np.savetxt(self.directory+'data/postprocessed_point_clouds/'+self.input_point_cloud+'/organised_clusters.csv',organised_clusters)
 
         print("Starting multithreaded cylinder fitting... This can take a while.")
         j = 0
         max_j = len(input_data)
-        # full_cyl_array = np.zeros((0, 14))
         outputlist = []
         with get_context("spawn").Pool(processes=self.num_procs) as pool:
             for i in pool.imap_unordered(MeasureTree.threaded_cyl_fitting, input_data):
                 outputlist.append(i)
-                # full_cyl_array = np.vstack((full_cyl_array, i))
                 if j % 10 == 0:
                     print('\r', j, '/', max_j, end='')
-                    # print(len(outputlist))
                 j += 1
         full_cyl_array = np.vstack(outputlist)
         print('\r', max_j, '/', max_j, end='')
@@ -643,9 +634,9 @@ class MeasureTree:
 
         # cyl_array = [x,y,z,nx,ny,nz,r,CCI,branch_id,tree_id,segment_volume,parent_branch_id]
         print("Saving cylinder array...")
-        save_file(self.output_dir + 'full_cyl_array.las', full_cyl_array, headers_of_interest=list(self.cyl_dict))
-        full_cyl_array, _ = load_file(self.output_dir + 'full_cyl_array.las',
-                                      headers_of_interest=list(self.cyl_dict))
+        # save_file(self.output_dir + 'full_cyl_array.las', full_cyl_array, headers_of_interest=list(self.cyl_dict))
+        # full_cyl_array, _ = load_file(self.output_dir + 'full_cyl_array.las',
+        #                               headers_of_interest=list(self.cyl_dict))
 
         print("Sorting Cylinders...")
         full_cyl_array = self.cylinder_sorting(full_cyl_array,
@@ -710,7 +701,7 @@ class MeasureTree:
                     sorted_full_cyl_array = np.vstack((sorted_full_cyl_array, tree))
                     t_id += 1
 
-        save_file(self.output_dir + 'sorted_full_cyl_array.las', sorted_full_cyl_array, headers_of_interest=list(self.cyl_dict))
+        # save_file(self.output_dir + 'sorted_full_cyl_array.las', sorted_full_cyl_array, headers_of_interest=list(self.cyl_dict))
 
         print("Cylinder interpolation...")
 
@@ -788,8 +779,8 @@ class MeasureTree:
         interpolated_full_cyl_array[:, self.cyl_dict['segment_angle_to_horiz']] = self.compute_angle(v1, v2)
         interpolated_full_cyl_array = get_heights_above_DTM(interpolated_full_cyl_array, self.DTM)
 
-        save_file(self.output_dir + 'interpolated_full_cyl_array.las', interpolated_full_cyl_array, headers_of_interest=list(self.cyl_dict))
-        interpolated_full_cyl_array, _ = load_file(self.output_dir + 'interpolated_full_cyl_array.las', headers_of_interest=list(self.cyl_dict))
+        # save_file(self.output_dir + 'interpolated_full_cyl_array.las', interpolated_full_cyl_array, headers_of_interest=list(self.cyl_dict))
+        # interpolated_full_cyl_array, _ = load_file(self.output_dir + 'interpolated_full_cyl_array.las', headers_of_interest=list(self.cyl_dict))
 
         print("Cylinder Outlier Removal...")
         input_data = []

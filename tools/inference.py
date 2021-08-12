@@ -58,7 +58,6 @@ def choose_most_confident_label(point_cloud, original_point_cloud):
     labels[:, :4] = np.median(point_cloud[indices][:, :, -4:], axis=1)
     labels[:, 4] = np.argmax(labels[:, :4], axis=1)
 
-    # original_point_cloud = np.hstack((original_point_cloud, labels))
     original_point_cloud = np.hstack((original_point_cloud, labels[:, 4:]))
     return original_point_cloud
 
@@ -107,8 +106,8 @@ class SemanticSegmentation:
                 for batch in batches:
                     outputb = np.asarray(output[data.batch.cpu() == batch])
                     outputb[:, :3] = outputb[:, :3] + np.asarray(data.local_shift.cpu())[3 * batch:3 + (3 * batch)]
-                    # self.output_point_cloud = np.vstack((self.output_point_cloud, outputb))
                     output_list.append(outputb)
+
             self.output_point_cloud = np.vstack(output_list)
             print('\r' + str(num_boxes)+'/'+str(num_boxes))
         del outputb, out, batches, pos, output  # clean up anything no longer needed to free RAM.

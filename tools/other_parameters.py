@@ -1,4 +1,5 @@
-# Don't change these unless you really understand what you are doing with them.
+# Don't change these unless you really understand what you are doing with them/are learning the code base.
+# These have been tuned to work on most high resolution forest point clouds without changing them.
 other_parameters = dict(model_filename='../model/model.pth',
                         box_dimensions=[6, 6, 6],
                         box_overlap=[0.5, 0.5, 0.5],
@@ -17,4 +18,11 @@ other_parameters = dict(model_filename='../model/model.pth',
                         sorting_search_radius=1,
                         sorting_angle_tolerance=90,
                         max_search_radius=3,
-                        max_search_angle=30)
+                        max_search_angle=30,
+                        slice_thickness=0.2,  # default = 0.2
+                        slice_increment=0.05,  # default = 0.05
+                        cleaned_measurement_radius=0.18,  # During cleaning, this w
+                        subsample=True,
+                        subsampling_min_spacing=0.01,
+                        minimum_CCI=0.3,  # Minimum valid Circuferential Completeness Index (CCI) for non-interpolated circle/cylinder fitting. Any measurements with CCI below this are deleted.
+                        min_tree_cyls=10)

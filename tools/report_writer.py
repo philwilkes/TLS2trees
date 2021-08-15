@@ -50,6 +50,26 @@ class ReportWriter:
         self.plot_outputs()
         self.create_report()
 
+        if self.parameters['minimise_output_size_mode']:
+            files_to_delete = ['terrain_points.las',
+                               'vegetation_points.las',
+                               'cwd_points.las',
+                               'stem_points.las',
+                               'segmented.las',
+                               'ground_veg.las',
+                               'plot_centre_coords.csv',
+                               'Plot_Report.md',
+                               self.filename[:-4] + '_working_point_cloud.las']
+            if self.parameters['plot_radius'] != 0 and self.parameters['plot_radius_buffer'] != 0:
+                files_to_delete.append('segmented_cleaned.las')
+            for file in files_to_delete:
+                try:
+                    os.remove(self.output_dir + file)
+                    print(self.output_dir + file, ' deleted.')
+
+                except FileNotFoundError:
+                    print(self.output_dir + file, ' not found.')
+
     def create_report(self):
         filename = self.output_dir + 'Plot_Report'
         mdFile = MdUtils(file_name=filename, title='Forest Structural Complexity Tool - Plot Report')

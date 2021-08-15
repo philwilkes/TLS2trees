@@ -1,0 +1,16 @@
+==> 2021-08-15 16:36:59 <==
+# cmd: C:\Users\seank\anaconda3\Scripts\conda-script.py create -p C:\Users\seank\Documents\GitHub\FSCT\environment -y python=3.9
+# conda version: 4.10.1
++defaults/noarch::tzdata-2021a-h5d7bf9c_0
++defaults/noarch::wheel-0.37.0-pyhd3eb1b0_0
++defaults/win-64::ca-certificates-2021.7.5-haa95532_1
++defaults/win-64::certifi-2021.5.30-py39haa95532_0
++defaults/win-64::openssl-1.1.1k-h2bbff1b_0
++defaults/win-64::pip-21.2.3-py38haa95532_0
++defaults/win-64::python-3.9.6-h6244533_0
++defaults/win-64::setuptools-52.0.0-py39haa95532_0
++defaults/win-64::sqlite-3.36.0-h2bbff1b_0
++defaults/win-64::vc-14.2-h21ff451_1
++defaults/win-64::vs2015_runtime-14.27.29016-h5e58377_2
++defaults/win-64::wincertstore-0.2-py39h2bbff1b_0
+# update specs: ['python=3.9']

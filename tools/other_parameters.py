@@ -19,8 +19,8 @@ other_parameters = dict(model_filename='../model/model.pth',
                         sorting_angle_tolerance=90,
                         max_search_radius=3,
                         max_search_angle=30,
-                        slice_thickness=0.2,  # default = 0.2
-                        slice_increment=0.05,  # default = 0.05
+                        slice_thickness=0.2,
+                        slice_increment=0.05,
                         cleaned_measurement_radius=0.18,  # During cleaning, this w
                         subsample=True,
                         subsampling_min_spacing=0.01,

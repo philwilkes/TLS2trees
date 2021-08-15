@@ -1,4 +1,4 @@
-numpy~=1.20.2
+numpy>=1.20.2
 torch==1.6.0
 torch-scatter==2.0.5
 torch-sparse==0.6.7

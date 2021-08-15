@@ -55,9 +55,11 @@ class MeasureTree:
 
         self.vegetation_points, headers_of_interest = load_file(self.output_dir + 'vegetation_points.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label', 'height_above_DTM'])
         self.vegetation_points = np.hstack((self.vegetation_points, np.zeros((self.vegetation_points.shape[0], 1))))
-        self.ground_veg = np.zeros((0, self.vegetation_points.shape[1]))
-        self.terrain_points, headers_of_interest = load_file(self.output_dir + 'terrain_points.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
-        self.cwd_points, headers_of_interest = load_file(self.output_dir + 'cwd_points.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
+        self.terrain_points, headers_of_interest = load_file(self.output_dir + 'terrain_points.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label', 'height_above_DTM'])
+        self.terrain_points = np.hstack((self.terrain_points, np.zeros((self.terrain_points.shape[0], 1))))
+
+        self.cwd_points, headers_of_interest = load_file(self.output_dir + 'cwd_points.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label', 'height_above_DTM'])
+        self.cwd_points = np.hstack((self.cwd_points, np.zeros((self.cwd_points.shape[0], 1))))
 
         self.DTM, headers_of_interest = load_file(self.output_dir + 'DTM.las')
         self.characters = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'dot', 'm', 'space', '_', '-', 'semiC',
@@ -825,13 +827,16 @@ class MeasureTree:
         ground_veg_mask = self.vegetation_points[:, self.veg_dict['height_above_dtm']] <= self.parameters['ground_veg_cutoff_height']
         self.ground_veg = self.vegetation_points[ground_veg_mask]
         save_file(self.output_dir + 'ground_veg.las', self.ground_veg, headers_of_interest=list(self.veg_dict))
+
         self.vegetation_points = self.vegetation_points[np.logical_not(ground_veg_mask)]
 
         # Simple nearest neighbours vegetation sorting.
-        neighbours = NearestNeighbors(n_neighbors=1, algorithm='kd_tree', metric='euclidean',
-                                      radius=self.parameters['veg_sorting_range']).fit(cleaned_cyls[:, :2])
-        _, indices = neighbours.kneighbors(self.vegetation_points[:, :2])
-        self.vegetation_points[:, self.veg_dict['tree_id']] = np.atleast_2d(cleaned_cyls[indices, self.cyl_dict['tree_id']]).T
+        kdtree = spatial.cKDTree(cleaned_cyls[:, :2], leafsize=1000)
+        results = kdtree.query(self.vegetation_points[:, :2], k=1)
+        mask = results[0] <= self.parameters['veg_sorting_range']
+        self.vegetation_points = self.vegetation_points[mask]
+        results = results[1][mask]
+        self.vegetation_points[:, self.veg_dict['tree_id']] = cleaned_cyls[results, self.cyl_dict['tree_id']]
 
         print("Measuring canopy gap fraction...")
         veg_kdtree = spatial.cKDTree(self.vegetation_points[:, :2], leafsize=10000)
@@ -870,17 +875,22 @@ class MeasureTree:
                               mean_understory_height_in_5m_radius=14)
 
         tree_data = np.zeros((0, 15))
-        intelligent_plot_cropping = False
+        tree_aware_plot_cropping = False
         plot_centre = np.loadtxt(self.output_dir + 'plot_centre_coords.csv')
 
         if self.parameters['plot_radius'] != 0 and self.parameters['plot_radius_buffer'] != 0:
-            print("Using intelligent plot cropping mode...")
-            intelligent_plot_cropping = True
+            print("Using tree aware plot cropping mode...")
+            tree_aware_plot_cropping = True
 
         cleaned_cylinders = np.zeros((0, cleaned_cyls.shape[1]))
-        if self.parameters['sort_stems']:
-            cyl_neighbours = NearestNeighbors(n_neighbors=1, algorithm='kd_tree', metric='euclidean',
-                                              radius=self.parameters['stem_sorting_range']).fit(cleaned_cyls[:, :3])
+        if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
+            kdtree = spatial.cKDTree(cleaned_cyls[:, :2], leafsize=1000)
+            results = kdtree.query(self.stem_points[:, :2], k=1)
+            mask = results[0] <= self.parameters['veg_sorting_range']
+            self.stem_points = self.stem_points[mask]
+            results = results[1][mask]
+            self.stem_points[:, self.stem_dict['tree_id']] = cleaned_cyls[results, self.cyl_dict['tree_id']]
+
         for tree_id in np.unique(cleaned_cyls[:, self.cyl_dict['tree_id']]):
             tree = cleaned_cyls[cleaned_cyls[:, self.cyl_dict['tree_id']] == tree_id]
             tree_vegetation = self.vegetation_points[self.vegetation_points[:, self.veg_dict['tree_id']] == tree_id]
@@ -898,12 +908,9 @@ class MeasureTree:
             tree_height = tree_max_point[-1]
             del combined
 
-            # Simple nearest neighbours stem_points sorting.
-            if self.parameters['sort_stems']:
-                _, indices = cyl_neighbours.kneighbors(self.stem_points[:, :3])
-                self.stem_points[:, self.stem_dict['tree_id']] = np.atleast_2d(cleaned_cyls[indices, self.cyl_dict['tree_id']]).T
+            if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
+                tree_points = self.stem_points[self.stem_points[:, self.stem_dict['tree_id']] == tree_id]
 
-            tree_points = self.stem_points[self.stem_points[:, self.stem_dict['tree_id']] == tree_id]
             base_northing = tree[np.argmin(tree[:, 2]), 0]
             base_easting = tree[np.argmin(tree[:, 2]), 1]
             DBH_slice = tree[np.logical_and(tree[:, self.cyl_dict['height_above_dtm']] >= 1.0,
@@ -975,11 +982,11 @@ class MeasureTree:
                     dbh_circle_points = self.create_3d_circles_as_points_flat(DBH_X, DBH_Y, DBH_Z, DBH / 2,
                                                                               circle_points=100)
 
-                    if intelligent_plot_cropping:
+                    if tree_aware_plot_cropping:
                         if np.linalg.norm(np.array([x_tree_base, y_tree_base]) - np.array(plot_centre)) < self.parameters['plot_radius']:
                             tree_data = np.vstack((tree_data, this_trees_data))
-                            if self.parameters['sort_stems']:
-                                stem_points_sorted = np.vstack((stem_points_sorted, tree_points))
+                            if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
+                                stem_points_sorted = np.vstack((stem_points_sorted, tree_points)) #TODO make this separate loop as it will be faster.
                             veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
                             cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
                             self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3,
@@ -987,7 +994,7 @@ class MeasureTree:
 
                     else:
                         tree_data = np.vstack((tree_data, this_trees_data))
-                        if self.parameters['sort_stems']:
+                        if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
                             stem_points_sorted = np.vstack((stem_points_sorted, tree_points))
                         veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
                         cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
@@ -995,9 +1002,12 @@ class MeasureTree:
                                                            height_measurement_line, dbh_circle_points))
 
         save_file(self.output_dir + 'text_point_cloud.las', self.text_point_cloud)
-        if self.parameters['sort_stems']:
-            save_file(self.output_dir + 'stem_points_sorted.las', stem_points_sorted, headers_of_interest=list(self.stem_dict))
-        save_file(self.output_dir + 'veg_points_sorted.las', veg_points_sorted, headers_of_interest=list(self.veg_dict))
+        if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
+            if not self.parameters['minimise_output_size_mode']:
+                save_file(self.output_dir + 'stem_points_sorted.las', stem_points_sorted, headers_of_interest=list(self.stem_dict))
+
+        if not self.parameters['minimise_output_size_mode']:
+            save_file(self.output_dir + 'veg_points_sorted.las', veg_points_sorted, headers_of_interest=list(self.veg_dict))
 
         if 1:
             print("Making cleaned cylinder visualisation...")
@@ -1018,22 +1028,16 @@ class MeasureTree:
             save_file(self.output_dir + 'cleaned_cyl_vis.las', cleaned_cyl_vis,
                       headers_of_interest=list(self.cyl_dict))
 
-        if intelligent_plot_cropping:
+        if tree_aware_plot_cropping and self.parameters['generate_output_point_cloud']:
             self.terrain_points = self.terrain_points[np.linalg.norm(self.terrain_points[:, :2]-plot_centre, axis=1) < self.parameters['plot_radius']]
             self.cwd_points = self.cwd_points[np.linalg.norm(self.cwd_points[:, :2]-plot_centre, axis=1) < self.parameters['plot_radius']]
             self.ground_veg = self.ground_veg[np.linalg.norm(self.ground_veg[:, :2]-plot_centre, axis=1) < self.parameters['plot_radius']]
 
             self.DTM = self.DTM[np.linalg.norm(self.DTM[:, :2] - plot_centre, axis=1) < self.parameters['plot_radius']]
-            save_file(self.output_dir + 'DTM.las', self.DTM)
-            self.ground_veg = self.ground_veg[:, [self.veg_dict['x'],
-                                                  self.veg_dict['y'],
-                                                  self.veg_dict['z'],
-                                                  self.veg_dict['red'],
-                                                  self.veg_dict['green'],
-                                                  self.veg_dict['blue']]]
+            save_file(self.output_dir + 'cropped_DTM.las', self.DTM)
+            tree_aware_cropped_point_cloud = np.vstack((self.terrain_points, self.cwd_points, self.ground_veg, stem_points_sorted, veg_points_sorted))  # , stem_points_sorted, veg_points_sorted))
 
-            intelligently_cropped_point_cloud = np.vstack((self.terrain_points, self.cwd_points, self.ground_veg))  # , stem_points_sorted, veg_points_sorted))
-            save_file(self.output_dir + 'intelligently_cropped_point_cloud.las', intelligently_cropped_point_cloud, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
+            save_file(self.output_dir + 'tree_aware_cropped_point_cloud.las', tree_aware_cropped_point_cloud, headers_of_interest=list(self.stem_dict))
 
         tree_data = pd.DataFrame(tree_data, columns=[i for i in tree_data_dict])
         tree_data.to_csv(self.output_dir + 'tree_data.csv', index=None, sep=',')

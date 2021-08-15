@@ -18,57 +18,62 @@ This will be improved in future versions, as it should be easily fixed with addi
 ## How to use
 
 Open the "run.py" file and set num_procs and batch_size appropriately for your computer hardware.
-Adjust the user parameters if needed or leave them as they are.
+Adjust the parameters if needed or leave them as they are.
 
-Run the "run.py" file. This will ask you to select 1 or multiple '.las' files.
+Run the "run.py" file. This will ask you to select 1 or multiple ".las" files.
 If all goes well, you will have a new directory in the same location as the ".las" file/s you selected and once complete,
 this will contain the following outputs.
 
+##FSCT Outputs
+
 ###Simple Outputs
-####plot_centre_coords.csv
+**plot_centre_coords.csv**
 
-####tree_data.csv
+**plot_extents.csv**
 
-####processing_report.csv
+**tree_data.csv**
 
-####Plot_Report.html and Plot_Report.md
+**processing_report.csv**
+
+**Plot_Report.html and Plot_Report.md
 A simple summary of the information extracted. Future versions will make this prettier.
 
 
 ###Point Cloud Outputs
-####cwd_points.las
 
-####DTM.las
+**cwd_points.las**
 
-####PLOT_NAME_working_point_cloud.las
+**DTM.las**
 
-####segmented.las
+**cropped_DTM.las**
 
-####segmented_cleaned.las
+**PLOT_NAME_working_point_cloud.las**
 
-####terrain_points.las
+**segmented.las**
 
-####vegetation_points.las
+**segmented_cleaned.las**
 
-####cwd_points.las
+**terrain_points.las**
 
-####stem_points.las
+**vegetation_points.las**
 
-####cleaned_cyls.las
+**ground_veg.las**
 
-####ground_veg.las
+**veg_points_sorted.las**
 
-####stem_points.las
+**cwd_points.las**
 
-####veg_points_sorted.las
+**stem_points.las**
 
-####stem_points_sorted.las
+**stem_points_sorted.las**
 
-####cleaned_cyl_vis.las
+**cleaned_cyls.las**
 
-####text_point_cloud.las
+**cleaned_cyl_vis.las**
 
-####tree_aware_cropped_point_cloud.las
+**text_point_cloud.las**
+
+**tree_aware_cropped_point_cloud.las**
 
 
 

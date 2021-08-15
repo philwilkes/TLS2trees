@@ -144,7 +144,7 @@ def save_file(filename, pointcloud, headers_of_interest=None, silent=False):
         print(filename, 'is empty...')
     else:
         if not silent:
-            print('Saving file...')
+            print('Saving file:', filename)
         if filename[-4:] == '.las':
             las = laspy.create(file_version="1.4", point_format=7)
             las.header.offsets = np.min(pointcloud[:, :3], axis=0)
@@ -171,7 +171,7 @@ def save_file(filename, pointcloud, headers_of_interest=None, silent=False):
                         setattr(las, header, column)
             las.write(filename)
             if not silent:
-                print("Saved to:", filename)
+                print("Saved.")
 
         elif filename[-4:] == '.csv':
             pd.DataFrame(pointcloud).to_csv(filename, header=None, index=None, sep=' ')
@@ -179,6 +179,7 @@ def save_file(filename, pointcloud, headers_of_interest=None, silent=False):
 
 
 def get_heights_above_DTM(points, DTM):
+    print('Getting heights above DTM...')
     grid = griddata((DTM[:, 0], DTM[:, 1]), DTM[:, 2], points[:, 0:2], method='linear',
                     fill_value=np.median(DTM[:, 2]))
     points[:, -1] = points[:, 2] - grid

@@ -26,7 +26,7 @@ if __name__ == '__main__':
 
                           # Circular Plot options - Leave at 0 if not using.
                           plot_radius=0,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
-                          plot_radius_buffer=0,  # See README.md  This is used for "Intelligent Plot Cropping Mode".
+                          plot_radius_buffer=3,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
 
                           # Rectangular/Tiled Plot options - Leave at 0 if not using.
                           x_length=0,  # NOT YET IMPLEMENTED
@@ -44,21 +44,27 @@ if __name__ == '__main__':
                           num_procs=10,  # Number of CPU cores you want to use. If you run out of RAM, lower this.
 
                           # Optional settings - Generally leave as they are.
+                          sort_stems=1,  # If you don't need the sorted stem points, turning this off speeds things up.
+                                         # Veg sorting is required for tree height measurement, but stem sorting isn't necessary for general use.
+
+                          generate_output_point_cloud=1,  # Turn on if you would like a semantic and instance segmented point cloud. This mode will override the "sort_stems" setting if on.
+                                                          # If you activate "tree aware plot cropping mode", this function will use it.
                           ground_veg_cutoff_height=3,  # Any vegetation points below this height are considered to be understory and are not assigned to individual trees.
                           veg_sorting_range=5,  # Vegetation points can be, at most, this far away from a cylinder horizontally to be matched to a particular tree.
-                          sort_stems=1,  # If you don't need the sorted stem points, turning this off speeds things up. Veg sorting is required for tree height measurement, but stem sorting isn't necessary for general use.
-                          stem_sorting_range=1,  # Stem points can be, at most, this far away from a cylinder in 3D to be matched to a particular tree.
+                          stem_sorting_range=2,  # Stem points can be, at most, this far away from a cylinder in 3D to be matched to a particular tree.
                           low_resolution_point_cloud_hack_mode=0,  # See README.md for details. Very ugly hack that can sometimes be useful on low resolution point clouds.
-                          delete_working_directory=True  # Generally leave this on. Deletes the files used for segmentation after segmentation is finished.
-                                                         # You may wish to turn it off if you want to re-run/modify the segmentation code so you don't need to run pre-processing every time.
+
+                          delete_working_directory=True,  # Generally leave this on. Deletes the files used for segmentation after segmentation is finished.
+                                                          # You may wish to turn it off if you want to re-run/modify the segmentation code so you don't need to run pre-processing every time.
+                          minimise_output_size_mode=0  # Will delete a number of non-essential outputs to reduce storage use.
                           )
 
         parameters.update(other_parameters)
         FSCT(parameters=parameters,
              # Set below to 0 or 1 (or True/False). Each step requires the previous step to have been run already.
-             # For standard use, just leave all set to 1.
-             preprocess=1,
-             segmentation=1,
+             # For standard use, just leave a   ll set to 1.
+             preprocess=0,
+             segmentation=0,
              postprocessing=1,
-             measure_plot=1,
-             make_report=1)
+             measure_plot=0,
+             make_report=0)

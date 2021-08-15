@@ -25,8 +25,8 @@ if __name__ == '__main__':
                           plot_centre=None,  # [X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the median XY coords of the point cloud.
 
                           # Circular Plot options - Leave at 0 if not using.
-                          plot_radius=4,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
-                          plot_radius_buffer=1,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
+                          plot_radius=0,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
+                          plot_radius_buffer=0,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
 
                           # Rectangular/Tiled Plot options - Leave at 0 if not using.
                           x_length=0,  # NOT YET IMPLEMENTED
@@ -47,6 +47,7 @@ if __name__ == '__main__':
                           sort_stems=1,  # If you don't need the sorted stem points, turning this off speeds things up.
                                          # Veg sorting is required for tree height measurement, but stem sorting isn't necessary for general use.
 
+                          tree_base_cutoff_height=8,  # A tree must have a cylinder measurement below this height above DTM to be kept. This filters unsorted branches from being called individual trees.
                           generate_output_point_cloud=1,  # Turn on if you would like a semantic and instance segmented point cloud. This mode will override the "sort_stems" setting if on.
                                                           # If you activate "tree aware plot cropping mode", this function will use it.
                           ground_veg_cutoff_height=3,  # Any vegetation points below this height are considered to be understory and are not assigned to individual trees.
@@ -56,7 +57,7 @@ if __name__ == '__main__':
 
                           delete_working_directory=True,  # Generally leave this on. Deletes the files used for segmentation after segmentation is finished.
                                                           # You may wish to turn it off if you want to re-run/modify the segmentation code so you don't need to run pre-processing every time.
-                          minimise_output_size_mode=0  # Will delete a number of non-essential outputs to reduce storage use.
+                          minimise_output_size_mode=1  # Will delete a number of non-essential outputs to reduce storage use.
                           )
 
         parameters.update(other_parameters)
@@ -67,4 +68,5 @@ if __name__ == '__main__':
              segmentation=0,
              postprocessing=0,
              measure_plot=1,
-             make_report=1)
+             make_report=1,
+             clean_up_files=0)

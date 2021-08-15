@@ -13,6 +13,7 @@ from matplotlib import cm
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 import warnings
+import shutil
 
 
 class ReportWriter:
@@ -22,53 +23,35 @@ class ReportWriter:
         self.output_dir = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/' + \
             self.filename.split('/')[-1][:-4] + '_FSCT_output/'
         self.filename = self.filename.split('/')[-1]
-        self.DTM, _ = load_file(self.output_dir + 'DTM.las')
-        self.cwd_points, _ = load_file(self.output_dir + 'cwd_points.las')
-        self.veg_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, tree_id=6, height_above_dtm=7)
-        self.ground_veg, _ = load_file(self.output_dir + 'ground_veg.las', headers_of_interest=list(self.veg_dict))
-        self.kml = simplekml.Kml()
-        self.tree_data = pd.read_csv(self.output_dir + 'tree_data.csv')
-        self.plot_area = 0
-        self.treeNo = np.array(self.tree_data['treeNo'])
-        self.x_tree_base = np.array(self.tree_data['x_tree_base'])
-        self.y_tree_base = np.array(self.tree_data['y_tree_base'])
-        self.DBH = np.array(self.tree_data['DBH'])
-        self.height = np.array(self.tree_data['Height'])
-        self.Volume = np.array(self.tree_data['Volume'])
-        self.processing_report = pd.read_csv(self.output_dir + 'processing_report.csv', index_col=False)
-        self.parameters['plot_radius'] = float(self.processing_report['Plot Radius'])
-        self.parameters['plot_radius_buffer'] = float(self.processing_report['Plot Radius Buffer'])
-        self.plot_area = float(self.processing_report['Plot Area'])
-        self.stems_per_ha = int(self.processing_report['Stems/ha'])
-        self.parameters['plot_centre'] = np.loadtxt(self.output_dir + 'plot_centre_coords.csv')
-        self.plot_centre_lat, self.plot_centre_lon = utm.to_latlon(easting=self.parameters['plot_centre'][0],
-                                                                   northing=self.parameters['plot_centre'][1],
-                                                                   zone_number=self.parameters['UTM_zone_number'],
-                                                                   zone_letter=self.parameters['UTM_zone_letter'],
-                                                                   northern=self.parameters['UTM_is_north'],
-                                                                   strict=None)
+
+    def make_report(self):
         self.plot_outputs()
         self.create_report()
 
-        if self.parameters['minimise_output_size_mode']:
-            files_to_delete = ['terrain_points.las',
-                               'vegetation_points.las',
-                               'cwd_points.las',
-                               'stem_points.las',
-                               'segmented.las',
-                               'ground_veg.las',
-                               'plot_centre_coords.csv',
-                               'Plot_Report.md',
-                               self.filename[:-4] + '_working_point_cloud.las']
-            if self.parameters['plot_radius'] != 0 and self.parameters['plot_radius_buffer'] != 0:
-                files_to_delete.append('segmented_cleaned.las')
-            for file in files_to_delete:
-                try:
-                    os.remove(self.output_dir + file)
-                    print(self.output_dir + file, ' deleted.')
+    def clean_up_files(self):
+        files_to_delete = ['terrain_points.las',
+                           'vegetation_points.las',
+                           'cwd_points.las',
+                           'stem_points.las',
+                           'segmented.las',
+                           'ground_veg.las',
+                           'plot_centre_coords.csv',
+                           'Plot_Report.md',
+                           self.filename[:-4] + '_working_point_cloud.las']
 
-                except FileNotFoundError:
-                    print(self.output_dir + file, ' not found.')
+        if self.parameters['plot_radius'] != 0 and self.parameters['plot_radius_buffer'] != 0:
+            files_to_delete.append('segmented_cleaned.las')
+
+        for file in files_to_delete:
+            try:
+                os.remove(self.output_dir + file)
+                print(self.output_dir + file, ' deleted.')
+
+            except FileNotFoundError or OSError:
+                print(self.output_dir + file, ' not found.')
+
+        if self.parameters['delete_working_directory']:
+            shutil.rmtree(self.output_dir+'working_directory/', ignore_errors=True)
 
     def create_report(self):
         filename = self.output_dir + 'Plot_Report'
@@ -127,6 +110,32 @@ class ReportWriter:
                                   encoding='utf8')
 
     def plot_outputs(self):
+        self.DTM, _ = load_file(self.output_dir + 'DTM.las')
+        self.cwd_points, _ = load_file(self.output_dir + 'cwd_points.las')
+        self.veg_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, tree_id=6, height_above_dtm=7)
+        self.ground_veg, _ = load_file(self.output_dir + 'ground_veg.las', headers_of_interest=list(self.veg_dict))
+        self.kml = simplekml.Kml()
+        self.tree_data = pd.read_csv(self.output_dir + 'tree_data.csv')
+        self.plot_area = 0
+        self.treeNo = np.array(self.tree_data['treeNo'])
+        self.x_tree_base = np.array(self.tree_data['x_tree_base'])
+        self.y_tree_base = np.array(self.tree_data['y_tree_base'])
+        self.DBH = np.array(self.tree_data['DBH'])
+        self.height = np.array(self.tree_data['Height'])
+        self.Volume = np.array(self.tree_data['Volume'])
+        self.processing_report = pd.read_csv(self.output_dir + 'processing_report.csv', index_col=False)
+        self.parameters['plot_radius'] = float(self.processing_report['Plot Radius'])
+        self.parameters['plot_radius_buffer'] = float(self.processing_report['Plot Radius Buffer'])
+        self.plot_area = float(self.processing_report['Plot Area'])
+        self.stems_per_ha = int(self.processing_report['Stems/ha'])
+        self.parameters['plot_centre'] = np.loadtxt(self.output_dir + 'plot_centre_coords.csv')
+        self.plot_centre_lat, self.plot_centre_lon = utm.to_latlon(easting=self.parameters['plot_centre'][0],
+                                                                   northing=self.parameters['plot_centre'][1],
+                                                                   zone_number=self.parameters['UTM_zone_number'],
+                                                                   zone_letter=self.parameters['UTM_zone_letter'],
+                                                                   northern=self.parameters['UTM_is_north'],
+                                                                   strict=None)
+
         self.ground_veg_map = self.ground_veg[:, [0, 1, self.veg_dict['height_above_dtm']]]
         self.ground_veg_map[self.ground_veg[:, self.veg_dict['height_above_dtm']] >= 0.5, 2] = 1
         self.ground_veg_map[self.ground_veg[:, self.veg_dict['height_above_dtm']] < 0.5, 2] = 0.5
@@ -263,6 +272,7 @@ class ReportWriter:
 
         fig1.show(False)
         fig1.savefig(self.output_dir + 'Stem_Map.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
+        plt.close()
 
         fig2 = plt.figure(figsize=(7, 7))
         ax2 = fig2.add_subplot(1, 1, 1)
@@ -282,6 +292,7 @@ class ReportWriter:
         fig2.show(False)
         fig2.savefig(self.output_dir + 'Diameter at Breast Height Distribution.png', dpi=600, bbox_inches='tight',
                      pad_inches=0.0)
+        plt.close()
 
         fig3 = plt.figure(figsize=(7, 7))
         ax3 = fig3.add_subplot(1, 1, 1)
@@ -300,6 +311,7 @@ class ReportWriter:
                  facecolor='green')
         fig3.show(False)
         fig3.savefig(self.output_dir + 'Tree Height Distribution.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
+        plt.close()
 
         fig4 = plt.figure(figsize=(7, 7))
         ax4 = fig4.add_subplot(1, 1, 1)
@@ -318,5 +330,5 @@ class ReportWriter:
                  facecolor='green')
         fig4.show(False)
         fig4.savefig(self.output_dir + 'Tree Volume Distribution.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
-        plt.close('all')
+        plt.close()
 

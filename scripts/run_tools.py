@@ -12,7 +12,7 @@ import os
 import sys
 
 
-def FSCT(parameters, preprocess=True, segmentation=True, postprocessing=True, measure_plot=True, make_report=True):
+def FSCT(parameters, preprocess=True, segmentation=True, postprocessing=True, measure_plot=True, make_report=True, clean_up_files=False):
     print(parameters['point_cloud_filename'])
 
     if preprocess:
@@ -36,7 +36,12 @@ def FSCT(parameters, preprocess=True, segmentation=True, postprocessing=True, me
         del measure1
 
     if make_report:
-        ReportWriter(parameters)
+        report_writer = ReportWriter(parameters)
+        report_writer.make_report()
+
+    if clean_up_files:
+        report_writer = ReportWriter(parameters)
+        report_writer.clean_up_files()
 
 
 def directory_mode():

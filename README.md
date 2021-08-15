@@ -282,7 +282,6 @@ clouds and plot measurements used during the development and validation of this 
 Interested in contributing to this code? Get in touch! This code is likely far from optimal, so if you find errors or 
 have ideas/suggestions on improvements, they would be very welcome!
 
-
 ## References
 The deep learning component uses Pytorch https://pytorch.org/ and Pytorch-Geometric 
 https://pytorch-geometric.readthedocs.io/en/latest/#

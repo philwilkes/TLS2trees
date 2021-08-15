@@ -698,7 +698,7 @@ class MeasureTree:
                     else:
                         assigned = False
 
-                if assigned is False and lowest_point_z < 5:
+                if assigned is False and lowest_point_z < self.parameters['tree_base_cutoff_height']:
                     tree[:, self.cyl_dict['tree_id']] = t_id
                     sorted_full_cyl_array = np.vstack((sorted_full_cyl_array, tree))
                     t_id += 1

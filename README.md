@@ -2,6 +2,8 @@
 
 ### Created by Sean Krisanski
 
+![img.png](img.png)
+
 ## Purpose of this tool
 
 This tool was written for the purpose of allowing plot scale measurements to be extracted automatically from most

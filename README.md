@@ -1,7 +1,7 @@
 # Forest Structural Complexity Tool
 
 ### Created by Sean Krisanski
-![banner.png](banner.png)
+![banner.png](readme_images/banner.png)
 ## Purpose of this tool
 
 This tool was written for the purpose of allowing plot scale measurements to be extracted automatically from most
@@ -59,22 +59,22 @@ The XY coordinates of the plot centre. *Will delete soon and just use processing
 **plot_extents.csv**
 XY coordinates of a rectangle defined by the edges of the plot and the plot centre. *Note: may delete or replace this soon*
 
-![simple_outputs.png](simple_outputs.png)
+![simple_outputs.png](readme_images/simple_outputs.png)
 
 
 ### Point Cloud Outputs
 
 **DTM.las** Digital Terrain Model in point form.
-![dtm1.png](dtm1.png)
+![dtm1.png](readme_images/dtm1.png)
 
 **cropped_DTM.las** Digital Terrain Model cropped to the plot_radius.
 ###
 
 **<PLOT_NAME>_working_point_cloud.las** The subsampled and cropped point cloud that is fed to the segmentation tool.
-![input_point_cloud.png](input_point_cloud.png)
+![input_point_cloud.png](readme_images/input_point_cloud.png)
 
 **segmented.las** The classified point cloud created by the segmentation tool.
-![segmented2.png](segmented2.png)
+![segmented2.png](readme_images/segmented2.png)
 
 **segmented_cleaned.las** The cleaned segmented point cloud created during the post-processing step.
 
@@ -97,7 +97,7 @@ XY coordinates of a rectangle defined by the edges of the plot and the plot cent
 **cleaned_cyl_vis.las** A point cloud visualisation of the circles/cylinders defined in cleaned_cyls.las
 Essentially makes circles out of points for every measurement in cleaned_cyls.
 
-![cleaned_cyl_vis.png](cleaned_cyl_vis.png)
+![cleaned_cyl_vis.png](readme_images/cleaned_cyl_vis.png)
 
 **text_point_cloud.las** A point cloud text visualisation of DBH, height, CCI at breast height. 
 It's a bit dodgy, but it works in any point cloud viewer.

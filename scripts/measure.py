@@ -68,7 +68,7 @@ class MeasureTree:
         self.character_viz = []
 
         for i in self.characters:
-            self.character_viz.append(np.genfromtxt('../scripts/numbers/' + i + '.csv', delimiter=','))
+            self.character_viz.append(np.genfromtxt('../tools/numbers/' + i + '.csv', delimiter=','))
 
         self.cyl_dict = dict(x=0, y=1, z=2, nx=3, ny=4, nz=5, radius=6, CCI=7, branch_id=8, parent_branch_id=9,
                              tree_id=10, segment_volume=11, segment_angle_to_horiz=12, height_above_dtm=13)

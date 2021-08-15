@@ -40,7 +40,7 @@ if __name__ == '__main__':
                           UTM_is_north=False,  # If in the northern hemisphere, set this to True.
 
                           # Set these appropriately for your hardware.
-                          batch_size=18,  # If you get CUDA errors, try lowering this. This is suitable for 24 GB of vRAM.
+                          batch_size=20,  # If you get CUDA errors, try lowering this. This is suitable for 24 GB of vRAM.
                           num_procs=10,  # Number of CPU cores you want to use. If you run out of RAM, lower this.
 
                           # Optional settings - Generally leave as they are.
@@ -64,7 +64,7 @@ if __name__ == '__main__':
              # Set below to 0 or 1 (or True/False). Each step requires the previous step to have been run already.
              # For standard use, just leave a   ll set to 1.
              preprocess=0,
-             segmentation=1,
-             postprocessing=1,
+             segmentation=0,
+             postprocessing=0,
              measure_plot=1,
              make_report=1)

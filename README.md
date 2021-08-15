@@ -14,6 +14,18 @@ will likely label the stems as vegetation points instead.
 There are also some instances where the segmentation model has not seen appropriate training data for the point cloud.
 This will be improved in future versions, as it should be easily fixed with additional training data.
 
+This usage of this tool is intended to be accessable to as many people as possible. With that goal in mind, I hope to 
+one day turn this into a simple executable program to avoid the need for Python skills. If you know how to do this and 
+would like to help make it happen, please get in touch!
+
+
+## Installation
+
+You will need to install all packages in the requirements.txt file. 
+
+If using Anaconda, create a clean environment and activate it. In Anaconda Prompt, type
+"pip install -r requirements.txt" and it should hopefully install all required packages for you.
+
 
 ## How to use
 
@@ -24,56 +36,65 @@ Run the "run.py" file. This will ask you to select 1 or multiple ".las" files.
 If all goes well, you will have a new directory in the same location as the ".las" file/s you selected and once complete,
 this will contain the following outputs.
 
+Start with small plots containing at least some trees. The tree measurement code will currently cause an error if it
+finds no trees in the point cloud.
+
 ##FSCT Outputs
 
-###Simple Outputs
-**plot_centre_coords.csv**
-
-**plot_extents.csv**
+**Plot_Report.html and Plot_Report.md**
+A summary of the information extracted. Nicer to look at than the processing report, but still a bit ugly in Version 1.
+Future versions will make this a bit nicer/add data tables/etc.
 
 **tree_data.csv**
+Basic measurements of the trees. 
+Headings are as follows (all units are in metres or cubic metres for volume)
+[x_tree_base, y_tree_base, z_tree_base, DBH, Height, Volume, Crown_mean_x, Crown_mean_y, Crown_top_x, Crown_top_y, Crown_top_z, mean_understory_height_in_5m_radius]
 
 **processing_report.csv**
+Summary information about the plot and the processing times. 
 
-**Plot_Report.html and Plot_Report.md
-A simple summary of the information extracted. Future versions will make this prettier.
+**plot_centre_coords.csv**
+The XY coordinates of the plot centre. *Will delete soon and just use processing_report for data storage.* 
 
+**plot_extents.csv**
+XY coordinates of a rectangle defined by the edges of the plot and the plot centre. *Note: may delete or replace this soon*
 
 ###Point Cloud Outputs
 
-**cwd_points.las**
+**DTM.las** Digital Terrain Model in point form.
 
-**DTM.las**
+**cropped_DTM.las** Digital Terrain Model cropped to the plot_radius.
 
-**cropped_DTM.las**
+**<PLOT_NAME>_working_point_cloud.las** The subsampled and cropped point cloud that is fed to the segmentation tool.
 
-**PLOT_NAME_working_point_cloud.las**
+**segmented.las** The classified point cloud created by the segmentation tool.
 
-**segmented.las**
+**segmented_cleaned.las** The cleaned segmented point cloud created during the post-processing step.
 
-**segmented_cleaned.las**
+**terrain_points.las**  Segmented terrain points.
 
-**terrain_points.las**
+**vegetation_points.las** Segmented vegetation points.
 
-**vegetation_points.las**
+**ground_veg.las** Ground vegetation points.
 
-**ground_veg.las**
+**veg_points_sorted.las** Vegetation assigned by tree_id. Ground points are given a tree_id of 0.
 
-**veg_points_sorted.las**
+**cwd_points.las** Segmented Coarse woody debris points.
 
-**cwd_points.las**
+**stem_points.las** Segmented stem points.
 
-**stem_points.las**
+**stem_points_sorted.las** Stem points assigned by tree_id.
 
-**stem_points_sorted.las**
+**cleaned_cyls.las** Point-based cylinder representation with a variety of properties. 
 
-**cleaned_cyls.las**
+**cleaned_cyl_vis.las** A point cloud visualisation of the circles/cylinders defined in cleaned_cyls.las
+Essentially makes circles out of points for every measurement in cleaned_cyls.
 
-**cleaned_cyl_vis.las**
+**text_point_cloud.las** A point cloud text visualisation of DBH, height, CCI at breast height. 
+It's a bit dodgy, but it works in any point cloud viewer.
 
-**text_point_cloud.las**
-
-**tree_aware_cropped_point_cloud.las**
+**tree_aware_cropped_point_cloud.las** If you specify a plot_radius and a plot_radius_buffer, this will trim the point
+cloud to the plot_radius. See the **Tree Aware Plot Cropping** section in User Parameters for more information on this mode.
 
 
 
@@ -85,8 +106,7 @@ at what it does.
 It is strongly recommended to have a CUDA compatible GPU (Nvidia) for running this tool. This can be run on CPU
 only, but expect inference to take a long time.
 
-It should be able to be run on most modern gaming desktop PCs (or particularly powerful laptops), however, it will
-take a while if you are running it on a lesser setup than below.
+It should be able to be run on most modern gaming desktop PCs (or decently powerful laptops).
 
 I use the following setup and the computational times are tolerable:
 - CPU: Intel i9-10900K (overclocked to 4.99GHz all cores).

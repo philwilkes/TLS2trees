@@ -39,7 +39,7 @@ this will contain the following outputs.
 Start with small plots containing at least some trees. The tree measurement code will currently cause an error if it
 finds no trees in the point cloud.
 
-##FSCT Outputs
+## FSCT Outputs
 
 **Plot_Report.html and Plot_Report.md**
 A summary of the information extracted. Nicer to look at than the processing report, but still a bit ugly in Version 1.
@@ -59,7 +59,7 @@ The XY coordinates of the plot centre. *Will delete soon and just use processing
 **plot_extents.csv**
 XY coordinates of a rectangle defined by the edges of the plot and the plot centre. *Note: may delete or replace this soon*
 
-###Point Cloud Outputs
+### Point Cloud Outputs
 
 **DTM.las** Digital Terrain Model in point form.
 
@@ -119,20 +119,20 @@ Hopefully in time, I'll be able to make this more efficient and less resource hu
 ## User Parameters
 
 ### Circular Plot options
-####plot_centre
+#### plot_centre
 [X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the median XY coords of the point cloud. Leave at None if not using.
 
-####plot_radius
+#### plot_radius
 If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer. Leave at 0 if not using.
 
-####plot_radius_buffer
+#### plot_radius_buffer
 This is used for "Tree Aware Plot Cropping Mode". Leave at 0 if not using.
 
 ### Rectangular/Tiled Plot options (NOT YET IMPLEMENTED)
 This will be a tile-based version of "Tree Aware Plot Cropping Mode" once implemented.
-####x_length=0,
-####y_length=0,
-####edge_buffer=0,
+#### x_length=0,
+#### y_length=0,
+#### edge_buffer=0,
 
 ### Tree Aware Plot Cropping
 The purpose of this mode is to simulate the behaviour of a typical field plot, by not chopping trees in half if they are
@@ -146,20 +146,20 @@ extend 3 m beyond the plot boundary without losing points. If we used a simple r
 just inside the boundary may be cut in half.
 
 This mode is used if plot_radius is non-zero and plot_radius_buffer is non-zero.
-###Other Parameters
-####Site
+### Other Parameters
+#### Site
 Enter the site name if you wish. Only used for report generation.
 
-####PlotID
+#### PlotID
 Enter the plot name/ID if you wish. Only used for report generation.
 
-####UTM_zone_number
+#### UTM_zone_number
 Optional: Set this or the Lat Lon outputs will be incorrect.
 
-####UTM_zone_letter
+#### UTM_zone_letter
 Optional: Used for the plot report.
 
-####UTM_is_north
+#### UTM_is_north
 If in the northern hemisphere, set this to True, otherwise False.
 
 ### Set these appropriately for your hardware.
@@ -173,19 +173,19 @@ The number of CPU cores you have/wish to use.
 
 ### Optional settings - Generally leave as they are.
 
-####ground_veg_cutoff_height
+#### ground_veg_cutoff_height
 Any vegetation points below this height are considered to be understory and are not assigned to individual trees.
 
-####veg_sorting_range
+#### veg_sorting_range
 Vegetation points can be, at most, this far away from a cylinder horizontally to be matched to a particular tree.
 
-####sort_stems
+#### sort_stems
 If you don't need the sorted stem points, turning this off speeds things up. Veg sorting is required for tree height measurement, but stem sorting isn't necessary for general use.
 
-####stem_sorting_range
+#### stem_sorting_range
 Stem points can be, at most, this far away from a cylinder in 3D to be matched to a particular tree.
 
-####low_resolution_point_cloud_hack_mode
+#### low_resolution_point_cloud_hack_mode
 This model was trained on relatively high resolution point clouds, so if a stem is of sufficiently low resolution,
 it will likely be classified as vegetation instead. Eventually, I will train this model on a larger training dataset
 with more examples of sparse point clouds, however, in the meantime, I came up with an ugly hack that
@@ -195,7 +195,7 @@ Low resolution hack mode will copy the input point cloud, jitter the points in r
 copied point cloud to the original point cloud. This gives the model more points to work with, which is closer to what
 it was trained on. Once inference is complete, the original point cloud is returned.
 
-####delete_working_directory
+#### delete_working_directory
 Generally leave this on. Deletes the files used for segmentation after segmentation is finished.
 You may wish to turn it off if you want to re-run/modify the segmentation code so you don't need to run pre-processing every time.
 

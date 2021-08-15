@@ -199,6 +199,31 @@ it was trained on. Once inference is complete, the original point cloud is retur
 Generally leave this on. Deletes the files used for segmentation after segmentation is finished.
 You may wish to turn it off if you want to re-run/modify the segmentation code so you don't need to run pre-processing every time.
 
+
+## Scripts
+
+**run.py** This is how you should interface with the code base.
+
+**run_tools.py** A few helper functions to clean up run.py.
+
+**tools.py** Other helper functions used throughout the code base.
+
+**preprocessing.py** Performs subsampling of the input point cloud and handles the slicing and dicing of the point
+cloud into samples the segmentation model can work with.
+
+**model.py** The segmentation model modified from the Pytorch Geometric implementation of Pointnet++.
+
+**inference.py** Performs the semantic segmentation on the samples and then reassembles them back into a full point
+cloud.
+
+**post_segmentation_script** Creates the Digital Terrain Model (DTM) and uses this and some basic rules to clean the
+segmented point cloud up. Creates the class specific point clouds (terrain, vegetation, CWD and stem points).
+
+**measure.py** Extracts measurements and metrics from the outputs of the post_segmentation_script.
+
+**report_writer** Summarises the measurements in a simple report format.
+
+
 ## Citation
 ### If you find this tool helpful or use this tool in your research, please cite:
 

@@ -225,7 +225,7 @@ segmented point cloud up. Creates the class specific point clouds (terrain, vege
 
 
 ## Citation
-### If you find this tool helpful or use this tool in your research, please cite:
+### If you use this tool in published research, please cite:
 
 **The semantic segmentation tool is described here:**
 \
@@ -239,6 +239,7 @@ https://doi.org/10.3390/rs13081413
 Krisanski, S.; Taskhiri, M.S.; Gonzalez Aracil, S.; Herries, D.; Montgomery, J.; Turner, P. Forest Structural Complexity Tool - An Open
 Source, Fully-Automated Tool for Measuring Forest Point Clouds. Remote Sens. 2021, XX, XXXX. 
 https://doi.org/XX.XXXX/rsXXXXXXXX
+
 
 ## Acknowledgements
 This research was funded by the Australian Research Council - Training Centre for Forest Value 

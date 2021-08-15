@@ -69,28 +69,24 @@ XY coordinates of a rectangle defined by the edges of the plot and the plot cent
 ###
 
 **<PLOT_NAME>_working_point_cloud.las** The subsampled and cropped point cloud that is fed to the segmentation tool.
-![working_point_cloud.png](working_point_cloud.png)
+![input_point_cloud.png](input_point_cloud.png)
 
 **segmented.las** The classified point cloud created by the segmentation tool.
-![segmented.png](segmented.png)
+![segmented2.png](segmented2.png)
 
 **segmented_cleaned.las** The cleaned segmented point cloud created during the post-processing step.
 
 **terrain_points.las**  Segmented terrain points.
-![terrain_points.png](terrain_points.png)
 
 **vegetation_points.las** Segmented vegetation points.
-![vegetation.png](vegetation.png)
 
 **ground_veg.las** Ground vegetation points.
 
 **veg_points_sorted.las** Vegetation assigned by tree_id. Ground points are given a tree_id of 0.
 
 **cwd_points.las** Segmented Coarse woody debris points.
-![cwd_points.png](cwd_points.png)
 
 **stem_points.las** Segmented stem points.
-![stem_points.png](stem_points.png)
 
 **stem_points_sorted.las** Stem points assigned by tree_id.
 

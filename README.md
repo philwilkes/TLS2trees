@@ -234,6 +234,22 @@ segmented point cloud up. Creates the class specific point clouds (terrain, vege
 **report_writer** Summarises the measurements in a simple report format.
 
 
+## Known Limitations
+Young trees with a lot of branching do not currently get segmented correctly.
+
+Some large trees do not currently get measured properly as the rules don't always hold.
+
+FSCT is unlikely to output useful results on low resolution point clouds. 
+Very high resolution Aerial LiDAR is about the lowest it can currently cope with.
+
+Small branches are often not detected.
+
+### Planned Solutions to these Limitations
+Additional training of the segmentation model to deal with younger trees and slightly lower resolution point clouds.
+
+Deep learning based cylinder fitting solution to handle greater diversity and complexity.
+
+
 ## Citation
 ### If you use this tool in published research, please cite:
 

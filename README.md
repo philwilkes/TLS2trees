@@ -104,6 +104,7 @@ It's a bit dodgy, but it works in any point cloud viewer.
 
 **tree_aware_cropped_point_cloud.las** If you specify a plot_radius and a plot_radius_buffer, this will trim the point
 cloud to the plot_radius. See the **Tree Aware Plot Cropping** section in User Parameters for more information on this mode.
+![individual_tree_segmentation.png](readme_images/individual_tree_segmentation.png)
 
 
 

@@ -64,9 +64,9 @@ if __name__ == '__main__':
         FSCT(parameters=parameters,
              # Set below to 0 or 1 (or True/False). Each step requires the previous step to have been run already.
              # For standard use, just leave a   ll set to 1.
-             preprocess=0,
-             segmentation=0,
-             postprocessing=0,
+             preprocess=1,
+             segmentation=1,
+             postprocessing=1,
              measure_plot=1,
              make_report=1,
-             clean_up_files=0)
+             clean_up_files=1)

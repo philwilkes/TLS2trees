@@ -23,6 +23,28 @@ class ReportWriter:
         self.output_dir = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/' + \
             self.filename.split('/')[-1][:-4] + '_FSCT_output/'
         self.filename = self.filename.split('/')[-1]
+        self.processing_report = pd.read_csv(self.output_dir+'processing_report.csv', index_col=False)
+        self.parameters['plot_centre'] = [float(self.processing_report['Plot Centre Northing']), float(self.processing_report['Plot Centre Easting'])]
+        self.plot_area = float(self.processing_report['Plot Area'])
+        self.stems_per_ha = int(self.processing_report['Stems/ha'])
+        self.parameters['plot_radius'] = float(self.processing_report['Plot Radius'])
+        self.parameters['plot_radius_buffer'] = float(self.processing_report['Plot Radius Buffer'])
+        self.parameters['UTM_zone_number'] = float(self.processing_report['UTM Zone'])
+
+        self.tree_data = pd.read_csv(self.output_dir + 'tree_data.csv')
+        self.treeNo = np.array(self.tree_data['treeNo'])
+        self.x_tree_base = np.array(self.tree_data['x_tree_base'])
+        self.y_tree_base = np.array(self.tree_data['y_tree_base'])
+        self.DBH = np.array(self.tree_data['DBH'])
+        self.height = np.array(self.tree_data['Height'])
+        self.Volume = np.array(self.tree_data['Volume'])
+
+        self.plot_centre_lat, self.plot_centre_lon = utm.to_latlon(easting=self.parameters['plot_centre'][0],
+                                                                   northing=self.parameters['plot_centre'][1],
+                                                                   zone_number=self.parameters['UTM_zone_number'],
+                                                                   zone_letter=self.parameters['UTM_zone_letter'],
+                                                                   northern=self.parameters['UTM_is_north'],
+                                                                   strict=None)
 
     def make_report(self):
         self.plot_outputs()
@@ -115,26 +137,8 @@ class ReportWriter:
         self.veg_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, tree_id=6, height_above_dtm=7)
         self.ground_veg, _ = load_file(self.output_dir + 'ground_veg.las', headers_of_interest=list(self.veg_dict))
         self.kml = simplekml.Kml()
-        self.tree_data = pd.read_csv(self.output_dir + 'tree_data.csv')
-        self.plot_area = 0
-        self.treeNo = np.array(self.tree_data['treeNo'])
-        self.x_tree_base = np.array(self.tree_data['x_tree_base'])
-        self.y_tree_base = np.array(self.tree_data['y_tree_base'])
-        self.DBH = np.array(self.tree_data['DBH'])
-        self.height = np.array(self.tree_data['Height'])
-        self.Volume = np.array(self.tree_data['Volume'])
-        self.processing_report = pd.read_csv(self.output_dir + 'processing_report.csv', index_col=False)
-        self.parameters['plot_radius'] = float(self.processing_report['Plot Radius'])
-        self.parameters['plot_radius_buffer'] = float(self.processing_report['Plot Radius Buffer'])
-        self.plot_area = float(self.processing_report['Plot Area'])
-        self.stems_per_ha = int(self.processing_report['Stems/ha'])
-        self.parameters['plot_centre'] = np.loadtxt(self.output_dir + 'plot_centre_coords.csv')
-        self.plot_centre_lat, self.plot_centre_lon = utm.to_latlon(easting=self.parameters['plot_centre'][0],
-                                                                   northing=self.parameters['plot_centre'][1],
-                                                                   zone_number=self.parameters['UTM_zone_number'],
-                                                                   zone_letter=self.parameters['UTM_zone_letter'],
-                                                                   northern=self.parameters['UTM_is_north'],
-                                                                   strict=None)
+
+
 
         self.ground_veg_map = self.ground_veg[:, [0, 1, self.veg_dict['height_above_dtm']]]
         self.ground_veg_map[self.ground_veg[:, self.veg_dict['height_above_dtm']] >= 0.5, 2] = 1
@@ -146,8 +150,6 @@ class ReportWriter:
         plot_centre = (dtmmin + dtmmax) / 2
         if self.parameters['plot_centre'] is None:
             self.parameters['plot_centre'] = plot_centre
-
-
 
         dtm_boundaries = [[np.min(self.DTM[:, 0]), np.min(self.DTM[:, 1]), 'SouthWestCorner'],
                           [np.min(self.DTM[:, 0]), np.max(self.DTM[:, 1]), 'NorthWestCorner'],

@@ -25,8 +25,8 @@ if __name__ == '__main__':
                           plot_centre=None,  # [X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the median XY coords of the point cloud.
 
                           # Circular Plot options - Leave at 0 if not using.
-                          plot_radius=0,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
-                          plot_radius_buffer=0,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
+                          plot_radius=10,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
+                          plot_radius_buffer=3,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
 
                           # Rectangular/Tiled Plot options - Leave at 0 if not using.
                           x_length=0,  # NOT YET IMPLEMENTED
@@ -35,7 +35,7 @@ if __name__ == '__main__':
 
                           Site='',  # Enter the site name if you wish. Only used for report generation.
                           PlotID='',  # Enter the plot name/ID if you wish. Only used for report generation.
-                          UTM_zone_number=50,  # Optional: Set this or the Lat Lon outputs will be incorrect.
+                          UTM_zone_number=56,  # Optional: Set this or the Lat Lon outputs will be incorrect.
                           UTM_zone_letter='',  # Optional: Used for the plot report.
                           UTM_is_north=False,  # If in the northern hemisphere, set this to True.
 
@@ -63,7 +63,7 @@ if __name__ == '__main__':
         parameters.update(other_parameters)
         FSCT(parameters=parameters,
              # Set below to 0 or 1 (or True/False). Each step requires the previous step to have been run already.
-             # For standard use, just leave a   ll set to 1.
+             # For standard use, just leave them all set to 1.
              preprocess=1,
              segmentation=1,
              postprocessing=1,

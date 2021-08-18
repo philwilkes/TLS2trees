@@ -113,8 +113,8 @@ class SemanticSegmentation:
         del outputb, out, batches, pos, output  # clean up anything no longer needed to free RAM.
         original_point_cloud, headers = load_file(self.directory + self.filename, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
         original_point_cloud[:, :3] = original_point_cloud[:, :3] - global_shift
-
-        self.output = np.asarray(choose_most_confident_label(self.output_point_cloud, original_point_cloud), dtype='float64')
+        self.output = choose_most_confident_label(self.output_point_cloud, original_point_cloud)
+        self.output = np.asarray(self.output, dtype='float64')
         self.output[:, :3] = self.output[:, :3] + global_shift
         save_file(self.output_dir + 'segmented.las', self.output, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label'])
 

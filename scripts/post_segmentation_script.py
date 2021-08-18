@@ -49,19 +49,11 @@ class PostProcessing:
 
     def make_DTM(self, crop_dtm=False):
         print("Making DTM...")
-        """
-        This function will generate a Digital Terrain Model (DTM) based on the terrain labelled points.
-        """
-        lower_thresh = np.percentile(self.terrain_points[:, 2], 2.5)
-        upper_thresh = np.percentile(self.terrain_points[:, 2], 80)
-        median_height = np.median(self.terrain_points[:, 2])
-        if upper_thresh < median_height + 3:  # If the upper threshold is within 3 m of the median, don't crop anything. The threshold is intended to crop false positive terrain classifications often in the canopy.
-            upper_thresh = np.max(self.terrain_points[:, 2])
-
-        self.terrain_points = self.terrain_points[np.logical_and(self.terrain_points[:, 2] >= lower_thresh,
-                                                                 self.terrain_points[:, 2] <= upper_thresh)]
-
-        kdtree = spatial.cKDTree(self.terrain_points[:, :2], leafsize=10000)
+        print('    Making full point cloud kdtree...')
+        full_point_cloud_kdtree = spatial.cKDTree(self.point_cloud[:, :2])
+        print('    Making terrain cloud kdtree...')
+        terrain_kdtree = spatial.cKDTree(self.terrain_points[:, :2])
+        print('    ...')
         xmin = np.floor(np.min(self.terrain_points[:, 0])) - 3
         ymin = np.floor(np.min(self.terrain_points[:, 1])) - 3
         xmax = np.ceil(np.max(self.terrain_points[:, 0])) + 3
@@ -72,17 +64,23 @@ class PostProcessing:
 
         for x in x_points:
             for y in y_points:
-                indices = []
-                radius = self.parameters['grid_resolution']
-                while len(indices) < 100:
-
-                    indices = kdtree.query_ball_point([x, y], r=radius)
+                radius = self.parameters['grid_resolution']*2
+                indices = terrain_kdtree.query_ball_point([x, y], r=radius)
+                while len(indices) <= 100 and radius <= self.parameters['grid_resolution'] * 5:
                     radius += self.parameters['grid_resolution']
+                    indices = terrain_kdtree.query_ball_point([x, y], r=radius)
+                if len(indices) >= 100:
+                    z = np.percentile(self.terrain_points[indices, 2], 20)
+                    grid_points = np.vstack((grid_points, np.array([[x, y, z]])))
 
-                if len(indices) > 0:
-                    z_points = self.terrain_points[indices, 2]
-                    z = np.median(z_points)
-                    grid_points = np.vstack((grid_points, np.array([[x, y, z]])))  # np.array([[np.median(self.terrain_points[indices,0]),np.median(self.terrain_points[indices,1]),z]]) ))
+                else:
+                    indices = full_point_cloud_kdtree.query_ball_point([x, y], r=radius)
+                    while len(indices) <= 100:
+                        radius += self.parameters['grid_resolution']
+                        indices = full_point_cloud_kdtree.query_ball_point([x, y], r=radius)
+
+                    z = np.percentile(self.point_cloud[indices, 2], 2.5)
+                    grid_points = np.vstack((grid_points, np.array([[x, y, z]])))
 
         if self.parameters['plot_radius'] > 0:
             plot_centre = np.loadtxt(self.output_dir + 'plot_centre_coords.csv')
@@ -91,21 +89,15 @@ class PostProcessing:
 
         elif crop_dtm:
             inds = [len(i) > 0 for i in
-                    kdtree.query_ball_point(grid_points[:, :2], r=self.parameters['grid_resolution'] * 5)]
+                    full_point_cloud_kdtree.query_ball_point(grid_points[:, :2], r=self.parameters['grid_resolution'] * 10)]
             grid_points = grid_points[inds, :]
-
-        grid_points = cluster_dbscan(grid_points, eps=self.parameters['grid_resolution'] * 1.5)
-        grid_points_keep = grid_points[grid_points[:, -1] == 0]
-
-        grid = griddata((grid_points_keep[:, 0], grid_points_keep[:, 1]), grid_points_keep[:, 2], grid_points[:, 0:2], method='linear',
-                        fill_value=np.median(grid_points_keep[:, 2]))
-        grid_points[:, 2] = grid
-
+        print('    DTM Done')
         return grid_points
 
     def process_point_cloud(self):
         self.terrain_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.terrain_class_label]  # -2 is now the class label as we added the height above DTM column.
         self.DTM = self.make_DTM(crop_dtm=True)
+        # self.DTM, _ = load_file(self.output_dir + 'DTM.las')
         save_file(self.output_dir + 'DTM.las', self.DTM)
 
         if self.parameters['plot_radius'] is not None or self.parameters['plot_radius'] != 0:
@@ -116,30 +108,32 @@ class PostProcessing:
             self.plot_area_estimate = self.convexhull.volume  # volume is area in 2d.
         print("Plot area is approximately", self.plot_area_estimate, "m^2 or", self.plot_area_estimate / 10000, 'ha')
 
+        above_and_below_DTM_trim_dist = 0.2
+
         self.point_cloud = get_heights_above_DTM(self.point_cloud, self.DTM)  # Add a height above DTM column to the point clouds.
         self.terrain_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.terrain_class_label]  # -2 is now the class label as we added the height above DTM column.
-        self.terrain_points_rejected = np.vstack((self.terrain_points[self.terrain_points[:, -1] <= -0.1],
-                                                  self.terrain_points[self.terrain_points[:, -1] > 0.1]))
-        self.terrain_points = self.terrain_points[np.logical_and(self.terrain_points[:, -1] > -0.2, self.terrain_points[:, -1] < 0.2)]
+        self.terrain_points_rejected = np.vstack((self.terrain_points[self.terrain_points[:, -1] <= -above_and_below_DTM_trim_dist],
+                                                  self.terrain_points[self.terrain_points[:, -1] > above_and_below_DTM_trim_dist]))
+        self.terrain_points = self.terrain_points[np.logical_and(self.terrain_points[:, -1] > -above_and_below_DTM_trim_dist, self.terrain_points[:, -1] < above_and_below_DTM_trim_dist)]
 
         save_file(self.output_dir + 'terrain_points.las', self.terrain_points, headers_of_interest=self.headers_of_interest, silent=False)
         self.stem_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.stem_class_label]
-        self.terrain_points = np.vstack((self.terrain_points, self.stem_points[np.logical_and(self.stem_points[:, -1] >= -0.05, self.stem_points[:, -1] <= 0.05)]))
-        self.stem_points_rejected = self.stem_points[self.stem_points[:, -1] <= 0.05]
-        self.stem_points = self.stem_points[self.stem_points[:, -1] > 0.05]
+        self.terrain_points = np.vstack((self.terrain_points, self.stem_points[np.logical_and(self.stem_points[:, -1] >= -above_and_below_DTM_trim_dist, self.stem_points[:, -1] <= above_and_below_DTM_trim_dist)]))
+        self.stem_points_rejected = self.stem_points[self.stem_points[:, -1] <= above_and_below_DTM_trim_dist]
+        self.stem_points = self.stem_points[self.stem_points[:, -1] > above_and_below_DTM_trim_dist]
         save_file(self.output_dir + 'stem_points.las', self.stem_points, headers_of_interest=self.headers_of_interest, silent=False)
 
         self.vegetation_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.vegetation_class_label]
-        self.terrain_points = np.vstack((self.terrain_points, self.vegetation_points[np.logical_and(self.vegetation_points[:, -1] >= -0.05, self.vegetation_points[:, -1] <= 0.05)]))
-        self.vegetation_points_rejected = self.vegetation_points[self.vegetation_points[:, -1] <= 0.05]
-        self.vegetation_points = self.vegetation_points[self.vegetation_points[:, -1] > 0.05]
+        self.terrain_points = np.vstack((self.terrain_points, self.vegetation_points[np.logical_and(self.vegetation_points[:, -1] >= -above_and_below_DTM_trim_dist, self.vegetation_points[:, -1] <= above_and_below_DTM_trim_dist)]))
+        self.vegetation_points_rejected = self.vegetation_points[self.vegetation_points[:, -1] <= above_and_below_DTM_trim_dist]
+        self.vegetation_points = self.vegetation_points[self.vegetation_points[:, -1] > above_and_below_DTM_trim_dist]
         save_file(self.output_dir + 'vegetation_points.las', self.vegetation_points, headers_of_interest=self.headers_of_interest, silent=False)
 
         self.cwd_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.cwd_class_label]  # -2 is now the class label as we added the height above DTM column.
-        self.terrain_points = np.vstack((self.terrain_points, self.cwd_points[np.logical_and(self.cwd_points[:, -1] >= -0.05, self.cwd_points[:, -1] <= 0.05)]))
+        self.terrain_points = np.vstack((self.terrain_points, self.cwd_points[np.logical_and(self.cwd_points[:, -1] >= -above_and_below_DTM_trim_dist, self.cwd_points[:, -1] <= above_and_below_DTM_trim_dist)]))
 
-        self.cwd_points_rejected = np.vstack((self.cwd_points[self.cwd_points[:, -1] <= 0.05], self.cwd_points[self.cwd_points[:, -1] >= 10]))
-        self.cwd_points = self.cwd_points[np.logical_and(self.cwd_points[:, -1] > 0.05, self.cwd_points[:, -1] < 3)]
+        self.cwd_points_rejected = np.vstack((self.cwd_points[self.cwd_points[:, -1] <= above_and_below_DTM_trim_dist], self.cwd_points[self.cwd_points[:, -1] >= 10]))
+        self.cwd_points = self.cwd_points[np.logical_and(self.cwd_points[:, -1] > above_and_below_DTM_trim_dist, self.cwd_points[:, -1] < 3)]
         save_file(self.output_dir + 'cwd_points.las', self.cwd_points, headers_of_interest=self.headers_of_interest, silent=False)
 
         self.terrain_points[:, self.label_index] = self.terrain_class_label

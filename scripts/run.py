@@ -29,9 +29,8 @@ if __name__ == '__main__':
                           plot_radius_buffer=1,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
 
                           # Rectangular/Tiled Plot options - Leave at 0 if not using.
-                          x_length=0,  # NOT YET IMPLEMENTED
-                          y_length=0,  # NOT YET IMPLEMENTED
-                          edge_buffer=0,  # NOT YET IMPLEMENTED
+                          grid_slicing_size=0,  # NOT YET IMPLEMENTED
+                          grid_buffer_distance=0,  # NOT YET IMPLEMENTED
 
                           Site='',  # Enter the site name if you wish. Only used for report generation.
                           PlotID='',  # Enter the plot name/ID if you wish. Only used for report generation.
@@ -54,7 +53,7 @@ if __name__ == '__main__':
                           veg_sorting_range=5,  # Vegetation points can be, at most, this far away from a cylinder horizontally to be matched to a particular tree.
                           stem_sorting_range=2,  # Stem points can be, at most, this far away from a cylinder in 3D to be matched to a particular tree.
                           low_resolution_point_cloud_hack_mode=0,  # See README.md for details. Very ugly hack that can sometimes be useful on low resolution point clouds.
-
+                          maximum_stem_diameter=3,  # Any diameters greater than this will be deemed erroneous and deleted.
                           delete_working_directory=True,  # Generally leave this on. Deletes the files used for segmentation after segmentation is finished.
                                                           # You may wish to turn it off if you want to re-run/modify the segmentation code so you don't need to run pre-processing every time.
                           minimise_output_size_mode=1  # Will delete a number of non-essential outputs to reduce storage use.

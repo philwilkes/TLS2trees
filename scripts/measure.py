@@ -116,11 +116,13 @@ class MeasureTree:
 
     def fix_outliers(self, tree_cylinders):
         radius_threshold = np.nanpercentile(tree_cylinders[:, self.cyl_dict['radius']], 70)
-        doubtful_cyl_mask = tree_cylinders[:, self.cyl_dict['radius']] > radius_threshold
-        neigh = NearestNeighbors(n_neighbors=2)
-        neigh.fit(tree_cylinders[np.logical_not(doubtful_cyl_mask), :3])
-        neighbour_list = neigh.kneighbors(tree_cylinders[doubtful_cyl_mask, :3], return_distance=False)
-        tree_cylinders[doubtful_cyl_mask, self.cyl_dict['radius']] = [np.median(tree_cylinders[np.logical_not(doubtful_cyl_mask), self.cyl_dict['radius']][indices]) for indices in neighbour_list]
+        doubtful_cyl_mask = np.logical_or(tree_cylinders[:, self.cyl_dict['radius']] >= radius_threshold,
+                                          tree_cylinders[:, self.cyl_dict['radius']] >= self.parameters['maximum_stem_diameter'])
+        if tree_cylinders[np.logical_not(doubtful_cyl_mask)].shape[0] > 0:
+            neigh = NearestNeighbors(n_neighbors=2)
+            neigh.fit(tree_cylinders[np.logical_not(doubtful_cyl_mask), :3])
+            neighbour_list = neigh.kneighbors(tree_cylinders[doubtful_cyl_mask, :3], return_distance=False)
+            tree_cylinders[doubtful_cyl_mask, self.cyl_dict['radius']] = [np.median(tree_cylinders[np.logical_not(doubtful_cyl_mask), self.cyl_dict['radius']][indices]) for indices in neighbour_list]
         return tree_cylinders
 
     @classmethod

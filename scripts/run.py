@@ -25,8 +25,8 @@ if __name__ == '__main__':
                           plot_centre=None,  # [X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the median XY coords of the point cloud.
 
                           # Circular Plot options - Leave at 0 if not using.
-                          plot_radius=10,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
-                          plot_radius_buffer=3,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
+                          plot_radius=60,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
+                          plot_radius_buffer=1,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
 
                           # Rectangular/Tiled Plot options - Leave at 0 if not using.
                           x_length=0,  # NOT YET IMPLEMENTED
@@ -69,4 +69,4 @@ if __name__ == '__main__':
              postprocessing=1,
              measure_plot=1,
              make_report=1,
-             clean_up_files=1)
+             clean_up_files=0)

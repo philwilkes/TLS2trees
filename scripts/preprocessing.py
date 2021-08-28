@@ -147,7 +147,7 @@ class Preprocessing:
             id_offset = 0
             for t in range(thread):
                 id_offset = id_offset + len(point_divisions[t])
-            print('Thread:', thread, prev_id_offset, id_offset)
+            # print('Thread:', thread, prev_id_offset, id_offset)
             prev_id_offset = id_offset
             t = threading.Thread(target=Preprocessing.threaded_boxes, args=(self.point_cloud,
                                                                             self.box_dimensions,

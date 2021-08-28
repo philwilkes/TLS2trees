@@ -49,11 +49,8 @@ class PostProcessing:
 
     def make_DTM(self, crop_dtm=False):
         print("Making DTM...")
-        print('    Making full point cloud kdtree...')
         full_point_cloud_kdtree = spatial.cKDTree(self.point_cloud[:, :2])
-        print('    Making terrain cloud kdtree...')
         terrain_kdtree = spatial.cKDTree(self.terrain_points[:, :2])
-        print('    ...')
         xmin = np.floor(np.min(self.terrain_points[:, 0])) - 3
         ymin = np.floor(np.min(self.terrain_points[:, 1])) - 3
         xmax = np.ceil(np.max(self.terrain_points[:, 0])) + 3
@@ -88,17 +85,17 @@ class PostProcessing:
             grid_points = grid_points[np.linalg.norm(grid_points[:, :2] - plot_centre, axis=1) <= crop_radius]
 
         elif crop_dtm:
-            inds = [len(i) > 0 for i in
-                    full_point_cloud_kdtree.query_ball_point(grid_points[:, :2], r=self.parameters['grid_resolution'] * 10)]
-            grid_points = grid_points[inds, :]
+            distances, _ = full_point_cloud_kdtree.query(grid_points[:, :2], k=[1])
+            distances = np.squeeze(distances)
+            grid_points = grid_points[distances <= self.parameters['grid_resolution']]
         print('    DTM Done')
         return grid_points
 
     def process_point_cloud(self):
         self.terrain_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.terrain_class_label]  # -2 is now the class label as we added the height above DTM column.
         self.DTM = self.make_DTM(crop_dtm=True)
-        # self.DTM, _ = load_file(self.output_dir + 'DTM.las')
         save_file(self.output_dir + 'DTM.las', self.DTM)
+        # self.DTM, _ = load_file(self.output_dir + 'DTM.las')
 
         if self.parameters['plot_radius'] is not None or self.parameters['plot_radius'] != 0:
             self.plot_area_estimate = np.pi*(self.parameters['plot_radius'])**2
@@ -111,7 +108,7 @@ class PostProcessing:
         above_and_below_DTM_trim_dist = 0.2
 
         self.point_cloud = get_heights_above_DTM(self.point_cloud, self.DTM)  # Add a height above DTM column to the point clouds.
-        self.terrain_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.terrain_class_label]  # -2 is now the class label as we added the height above DTM column.
+        self.terrain_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.terrain_class_label]
         self.terrain_points_rejected = np.vstack((self.terrain_points[self.terrain_points[:, -1] <= -above_and_below_DTM_trim_dist],
                                                   self.terrain_points[self.terrain_points[:, -1] > above_and_below_DTM_trim_dist]))
         self.terrain_points = self.terrain_points[np.logical_and(self.terrain_points[:, -1] > -above_and_below_DTM_trim_dist, self.terrain_points[:, -1] < above_and_below_DTM_trim_dist)]

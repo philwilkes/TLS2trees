@@ -38,10 +38,12 @@ def FSCT(parameters, preprocess=True, segmentation=True, postprocessing=True, me
     if make_report:
         report_writer = ReportWriter(parameters)
         report_writer.make_report()
+        del report_writer
 
     if clean_up_files:
         report_writer = ReportWriter(parameters)
         report_writer.clean_up_files()
+        del report_writer
 
 
 def directory_mode():

@@ -118,7 +118,7 @@ class MeasureTree:
         radius_threshold = np.nanpercentile(tree_cylinders[:, self.cyl_dict['radius']], 70)
         doubtful_cyl_mask = np.logical_or(tree_cylinders[:, self.cyl_dict['radius']] >= radius_threshold,
                                           tree_cylinders[:, self.cyl_dict['radius']] >= self.parameters['maximum_stem_diameter'])
-        if tree_cylinders[np.logical_not(doubtful_cyl_mask)].shape[0] > 0:
+        if tree_cylinders[np.logical_not(doubtful_cyl_mask)].shape[0] > 1:
             neigh = NearestNeighbors(n_neighbors=2)
             neigh.fit(tree_cylinders[np.logical_not(doubtful_cyl_mask), :3])
             neighbour_list = neigh.kneighbors(tree_cylinders[doubtful_cyl_mask, :3], return_distance=False)
@@ -493,7 +493,7 @@ class MeasureTree:
         Returns:
             CCI
         """
-        sector_angle = 18  # degrees
+        sector_angle = 9  # degrees
         num_sections = int(np.ceil(360 / sector_angle))
         sectors = np.linspace(-180, 180, num=num_sections, endpoint=False)
 
@@ -877,12 +877,16 @@ class MeasureTree:
                               mean_understory_height_in_5m_radius=14)
 
         tree_data = np.zeros((0, 15))
-        tree_aware_plot_cropping = False
+        radial_tree_aware_plot_cropping = False
+        square_tree_aware_plot_cropping = False
         plot_centre = np.loadtxt(self.output_dir + 'plot_centre_coords.csv')
 
-        if self.parameters['plot_radius'] != 0 and self.parameters['plot_radius_buffer'] != 0:
+        if self.parameters['plot_radius'] > 0 and self.parameters['plot_radius_buffer'] > 0:
             print("Using tree aware plot cropping mode...")
-            tree_aware_plot_cropping = True
+            radial_tree_aware_plot_cropping = True
+
+        elif self.parameters['square_grid_slicing_size'] > 0 and self.parameters['grid_buffer_distance'] > 0:
+            square_tree_aware_plot_cropping = True
 
         cleaned_cylinders = np.zeros((0, cleaned_cyls.shape[1]))
         if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
@@ -900,8 +904,8 @@ class MeasureTree:
             combined = np.hstack((combined, np.zeros((combined.shape[0], 1))))
             combined = get_heights_above_DTM(combined, self.DTM)
 
-            # Get highest point of tree. Note, there is usually noise, so we use the 95th percentile.
-            tree_max_point = combined[abs(combined[:, 2] - np.percentile(combined[:, 2], 95, interpolation='nearest')).argmin()]
+            # Get highest point of tree. Note, there is usually noise, so we use the 98th percentile.
+            tree_max_point = combined[abs(combined[:, 2] - np.percentile(combined[:, 2], 98, interpolation='nearest')).argmin()]
 
             tree_base_point = deepcopy(combined[np.argmin(combined[:, -1])])
             z_tree_base = tree_base_point[2] - tree_base_point[-1]
@@ -984,16 +988,29 @@ class MeasureTree:
                     dbh_circle_points = self.create_3d_circles_as_points_flat(DBH_X, DBH_Y, DBH_Z, DBH / 2,
                                                                               circle_points=100)
 
-                    if tree_aware_plot_cropping:
+                    if radial_tree_aware_plot_cropping:
                         if np.linalg.norm(np.array([x_tree_base, y_tree_base]) - np.array(plot_centre)) < self.parameters['plot_radius']:
                             tree_data = np.vstack((tree_data, this_trees_data))
                             if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
-                                stem_points_sorted = np.vstack((stem_points_sorted, tree_points)) #TODO make this separate loop as it will be faster.
+                                stem_points_sorted = np.vstack((stem_points_sorted, tree_points))  # TODO make this separate loop as it will be faster.
                             veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
                             cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
                             self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3,
                                                                height_measurement_line, dbh_circle_points))
+                    elif square_tree_aware_plot_cropping:
+                        x_min_coord = plot_centre[0] - self.parameters['square_grid_slicing_size']/2
+                        x_max_coord = plot_centre[0] + self.parameters['square_grid_slicing_size']/2
+                        y_min_coord = plot_centre[1] - self.parameters['square_grid_slicing_size']/2
+                        y_max_coord = plot_centre[1] + self.parameters['square_grid_slicing_size']/2
 
+                        if x_tree_base >= x_min_coord and x_tree_base < x_max_coord and y_tree_base >= y_min_coord and y_tree_base < y_max_coord:
+                            if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
+                                stem_points_sorted = np.vstack((stem_points_sorted, tree_points))
+                            tree_data = np.vstack((tree_data, this_trees_data))
+                            veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
+                            cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
+                            self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3,
+                                                               height_measurement_line, dbh_circle_points))
                     else:
                         tree_data = np.vstack((tree_data, this_trees_data))
                         if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
@@ -1030,12 +1047,35 @@ class MeasureTree:
             save_file(self.output_dir + 'cleaned_cyl_vis.las', cleaned_cyl_vis,
                       headers_of_interest=list(self.cyl_dict))
 
-        if tree_aware_plot_cropping and self.parameters['generate_output_point_cloud']:
+        if radial_tree_aware_plot_cropping and self.parameters['generate_output_point_cloud']:
             self.terrain_points = self.terrain_points[np.linalg.norm(self.terrain_points[:, :2]-plot_centre, axis=1) < self.parameters['plot_radius']]
             self.cwd_points = self.cwd_points[np.linalg.norm(self.cwd_points[:, :2]-plot_centre, axis=1) < self.parameters['plot_radius']]
             self.ground_veg = self.ground_veg[np.linalg.norm(self.ground_veg[:, :2]-plot_centre, axis=1) < self.parameters['plot_radius']]
 
             self.DTM = self.DTM[np.linalg.norm(self.DTM[:, :2] - plot_centre, axis=1) < self.parameters['plot_radius']]
+            save_file(self.output_dir + 'cropped_DTM.las', self.DTM)
+            tree_aware_cropped_point_cloud = np.vstack((self.terrain_points, self.cwd_points, self.ground_veg, stem_points_sorted, veg_points_sorted))  # , stem_points_sorted, veg_points_sorted))
+
+            save_file(self.output_dir + 'tree_aware_cropped_point_cloud.las', tree_aware_cropped_point_cloud, headers_of_interest=list(self.stem_dict))
+
+        if square_tree_aware_plot_cropping and self.parameters['generate_output_point_cloud']:
+            x_min_coord = plot_centre[0] - self.parameters['square_grid_slicing_size'] / 2
+            x_max_coord = plot_centre[0] + self.parameters['square_grid_slicing_size'] / 2
+            y_min_coord = plot_centre[1] - self.parameters['square_grid_slicing_size'] / 2
+            y_max_coord = plot_centre[1] + self.parameters['square_grid_slicing_size'] / 2
+
+            self.terrain_points = self.terrain_points[np.logical_and(self.terrain_points[:, 0] >= x_min_coord, self.terrain_points[:, 0] < x_max_coord)]
+            self.terrain_points = self.terrain_points[np.logical_and(self.terrain_points[:, 1] >= y_min_coord, self.terrain_points[:, 1] < y_max_coord)]
+
+            self.cwd_points = self.cwd_points[np.logical_and(self.cwd_points[:, 0] >= x_min_coord, self.cwd_points[:, 0] < x_max_coord)]
+            self.cwd_points = self.cwd_points[np.logical_and(self.cwd_points[:, 1] >= y_min_coord, self.cwd_points[:, 1] < y_max_coord)]
+
+            self.ground_veg = self.ground_veg[np.logical_and(self.ground_veg[:, 0] >= x_min_coord, self.ground_veg[:, 0] < x_max_coord)]
+            self.ground_veg = self.ground_veg[np.logical_and(self.ground_veg[:, 1] >= y_min_coord, self.ground_veg[:, 1] < y_max_coord)]
+
+            self.DTM = self.DTM[np.logical_and(self.DTM[:, 0] >= x_min_coord, self.DTM[:, 0] < x_max_coord)]
+            self.DTM = self.DTM[np.logical_and(self.DTM[:, 1] >= y_min_coord, self.DTM[:, 1] < y_max_coord)]
+
             save_file(self.output_dir + 'cropped_DTM.las', self.DTM)
             tree_aware_cropped_point_cloud = np.vstack((self.terrain_points, self.cwd_points, self.ground_veg, stem_points_sorted, veg_points_sorted))  # , stem_points_sorted, veg_points_sorted))
 

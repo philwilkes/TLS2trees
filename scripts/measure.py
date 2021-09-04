@@ -8,7 +8,7 @@ import pandas as pd
 import simplekml
 import utm
 import os
-from scipy import spatial
+from scipy import spatial  # TODO Test if sklearn kdtree is faster.
 from scipy.spatial import ConvexHull
 from scipy.interpolate import CubicSpline
 from scipy.interpolate import griddata
@@ -53,14 +53,6 @@ class MeasureTree:
                                                         self.parameters['num_procs'])
             save_file(self.output_dir + self.filename[:-4] + '_stem_points_hack_mode_cloud.las', self.stem_points)
 
-        self.vegetation_points, headers_of_interest = load_file(self.output_dir + 'vegetation_points.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label', 'height_above_DTM'])
-        self.vegetation_points = np.hstack((self.vegetation_points, np.zeros((self.vegetation_points.shape[0], 1))))
-        self.terrain_points, headers_of_interest = load_file(self.output_dir + 'terrain_points.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label', 'height_above_DTM'])
-        self.terrain_points = np.hstack((self.terrain_points, np.zeros((self.terrain_points.shape[0], 1))))
-
-        self.cwd_points, headers_of_interest = load_file(self.output_dir + 'cwd_points.las', headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label', 'height_above_DTM'])
-        self.cwd_points = np.hstack((self.cwd_points, np.zeros((self.cwd_points.shape[0], 1))))
-
         self.DTM, headers_of_interest = load_file(self.output_dir + 'DTM.las')
         self.characters = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'dot', 'm', 'space', '_', '-', 'semiC',
                            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', '_M', 'N', 'O', 'P', 'Q', 'R',
@@ -75,6 +67,68 @@ class MeasureTree:
 
         self.veg_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, label=6, height_above_dtm=7, tree_id=8)
         self.stem_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, label=6, height_above_dtm=7, tree_id=8)
+        self.tree_data_dict = dict(Site=0, PlotID=1, treeNo=2, x_tree_base=3, y_tree_base=4, z_tree_base=5, DBH=6,
+                                   Height=7,
+                                   Volume=8, Crown_mean_x=9, Crown_mean_y=10, Crown_top_x=11, Crown_top_y=12,
+                                   Crown_top_z=13,
+                                   mean_understory_height_in_5m_radius=14)
+        self.terrain_points, headers_of_interest = load_file(self.output_dir + 'terrain_points.las',
+                                                             headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue',
+                                                                                  'label', 'height_above_DTM'])
+        self.terrain_points = np.hstack((self.terrain_points, np.zeros((self.terrain_points.shape[0], 1))))
+
+        self.vegetation_points, headers_of_interest = load_file(self.output_dir + 'vegetation_points.las',
+                                                                headers_of_interest=['x', 'y', 'z', 'red', 'green',
+                                                                                     'blue', 'label',
+                                                                                     'height_above_DTM'])
+        self.vegetation_points = np.hstack((self.vegetation_points, np.zeros((self.vegetation_points.shape[0], 1))))
+
+        # Remove understorey vegetation and save it.
+        ground_veg_mask = self.vegetation_points[:, self.veg_dict['height_above_dtm']] <= self.parameters[
+            'ground_veg_cutoff_height']
+        self.ground_veg = self.vegetation_points[ground_veg_mask]
+        save_file(self.output_dir + 'ground_veg.las', self.ground_veg, headers_of_interest=list(self.veg_dict))
+        self.vegetation_points = self.vegetation_points[np.logical_not(ground_veg_mask)]
+        print("Measuring canopy gap fraction...")
+        veg_kdtree = spatial.cKDTree(self.vegetation_points[:, :2], leafsize=10000)
+        self.ground_veg_kdtree = spatial.cKDTree(self.ground_veg[:, :2], leafsize=10000)
+        xmin = np.floor(np.min(self.terrain_points[:, 0]))
+        ymin = np.floor(np.min(self.terrain_points[:, 1]))
+        xmax = np.ceil(np.max(self.terrain_points[:, 0]))
+        ymax = np.ceil(np.max(self.terrain_points[:, 1]))
+        x_points = np.linspace(xmin, xmax,
+                               int(np.ceil((xmax - xmin) / self.parameters['Vegetation_coverage_resolution'])) + 1)
+        y_points = np.linspace(ymin, ymax,
+                               int(np.ceil((ymax - ymin) / self.parameters['Vegetation_coverage_resolution'])) + 1)
+
+        convexhull = spatial.ConvexHull(self.DTM[:, :2])
+        self.ground_area = 0
+        self.canopy_area = 0
+        self.ground_veg_area = 0
+        for x in x_points:
+            for y in y_points:
+                if self.inside_conv_hull(np.array([x, y]), convexhull):
+                    indices = veg_kdtree.query_ball_point([x, y],
+                                                          r=self.parameters['Vegetation_coverage_resolution'], p=10)
+                    ground_veg_indices = self.ground_veg_kdtree.query_ball_point([x, y], r=self.parameters[
+                        'Vegetation_coverage_resolution'], p=10)
+
+                    self.ground_area += 1
+                    if len(indices) > 5:
+                        self.canopy_area += 1
+
+                    if len(ground_veg_indices) > 5:
+                        self.ground_veg_area += 1
+
+        print(self.canopy_area, self.ground_area, "Canopy Gap Fraction:", self.canopy_area / self.ground_area)
+
+
+
+
+        self.cwd_points, headers_of_interest = load_file(self.output_dir + 'cwd_points.las',
+                                                         headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue',
+                                                                              'label', 'height_above_DTM'])
+        self.cwd_points = np.hstack((self.cwd_points, np.zeros((self.cwd_points.shape[0], 1))))
 
         self.text_point_cloud = np.zeros((0, 3))
         self.tree_measurements = np.zeros((0, 8))
@@ -786,100 +840,12 @@ class MeasureTree:
         # save_file(self.output_dir + 'interpolated_full_cyl_array.las', interpolated_full_cyl_array, headers_of_interest=list(self.cyl_dict))
         # interpolated_full_cyl_array, _ = load_file(self.output_dir + 'interpolated_full_cyl_array.las', headers_of_interest=list(self.cyl_dict))
 
-        print("Cylinder Outlier Removal...")
-        input_data = []
-        i = 0
-        tree_id_list = np.unique(interpolated_full_cyl_array[:, self.cyl_dict['tree_id']])
-        max_tree_id = int(np.max(tree_id_list))
-        for tree_id in tree_id_list:
-            if tree_id % 10 == 0:
-                print('\r', tree_id, '/', max_tree_id, end='')
-            i += 1
-            single_tree = interpolated_full_cyl_array[
-                interpolated_full_cyl_array[:, self.cyl_dict['tree_id']] == tree_id]
-            if single_tree.shape[0] > 0:
-                single_tree = self.fix_outliers(single_tree)
-                input_data.append([single_tree, self.parameters['cleaned_measurement_radius'], self.cyl_dict])
-
-        print('\r', max_tree_id, '/', max_tree_id, end='')
-        print('\nDone\n')
-
-        print("Starting multithreaded cylinder cleaning/smoothing...")
-        j = 0
-        max_j = len(input_data)
-
-        cleaned_cyls_list = []
-        with get_context("spawn").Pool(processes=self.num_procs) as pool:
-            for i in pool.imap_unordered(MeasureTree.cylinder_cleaning_multithreaded, input_data):
-                cleaned_cyls_list.append(i)
-                if j % 11 == 0:
-                    print('\r', j, '/', max_j, end='')
-                j += 1
-        cleaned_cyls = np.vstack(cleaned_cyls_list)
-
-        del cleaned_cyls_list
-        print('\r', max_j, '/', max_j, end='')
-        print('\nDone\n')
-
-        save_file(self.output_dir + 'cleaned_cyls.las', cleaned_cyls,
-                  headers_of_interest=list(self.cyl_dict))
-
-        print("Sorting vegetation...")
-        # Remove understorey vegetation and save it.
-        ground_veg_mask = self.vegetation_points[:, self.veg_dict['height_above_dtm']] <= self.parameters['ground_veg_cutoff_height']
-        self.ground_veg = self.vegetation_points[ground_veg_mask]
-        save_file(self.output_dir + 'ground_veg.las', self.ground_veg, headers_of_interest=list(self.veg_dict))
-
-        self.vegetation_points = self.vegetation_points[np.logical_not(ground_veg_mask)]
-
-        # Simple nearest neighbours vegetation sorting.
-        kdtree = spatial.cKDTree(cleaned_cyls[:, :2], leafsize=1000)
-        results = kdtree.query(self.vegetation_points[:, :2], k=1)
-        mask = results[0] <= self.parameters['veg_sorting_range']
-        self.vegetation_points = self.vegetation_points[mask]
-        results = results[1][mask]
-        self.vegetation_points[:, self.veg_dict['tree_id']] = cleaned_cyls[results, self.cyl_dict['tree_id']]
-
-        print("Measuring canopy gap fraction...")
-        veg_kdtree = spatial.cKDTree(self.vegetation_points[:, :2], leafsize=10000)
-        ground_veg_kdtree = spatial.cKDTree(self.ground_veg[:, :2], leafsize=10000)
-        xmin = np.floor(np.min(self.terrain_points[:, 0]))
-        ymin = np.floor(np.min(self.terrain_points[:, 1]))
-        xmax = np.ceil(np.max(self.terrain_points[:, 0]))
-        ymax = np.ceil(np.max(self.terrain_points[:, 1]))
-        x_points = np.linspace(xmin, xmax, int(np.ceil((xmax - xmin) / self.parameters['Vegetation_coverage_resolution'])) + 1)
-        y_points = np.linspace(ymin, ymax, int(np.ceil((ymax - ymin) / self.parameters['Vegetation_coverage_resolution'])) + 1)
-
-        convexhull = spatial.ConvexHull(self.DTM[:, :2])
-        self.ground_area = 0
-        self.canopy_area = 0
-        self.ground_veg_area = 0
-        for x in x_points:
-            for y in y_points:
-                if self.inside_conv_hull(np.array([x, y]), convexhull):
-                    indices = veg_kdtree.query_ball_point([x, y], r=self.parameters['Vegetation_coverage_resolution'], p=10)
-                    ground_veg_indices = ground_veg_kdtree.query_ball_point([x, y], r=self.parameters['Vegetation_coverage_resolution'], p=10)
-
-                    self.ground_area += 1
-                    if len(indices) > 5:
-                        self.canopy_area += 1
-
-                    if len(ground_veg_indices) > 5:
-                        self.ground_veg_area += 1
-
-        print(self.canopy_area, self.ground_area, "Canopy Gap Fraction:", self.canopy_area / self.ground_area)
-
-        stem_points_sorted = np.zeros((0, len(list(self.stem_dict))))
-        veg_points_sorted = np.zeros((0, len(list(self.veg_dict))))
-
-        tree_data_dict = dict(Site=0, PlotID=1, treeNo=2, x_tree_base=3, y_tree_base=4, z_tree_base=5, DBH=6, Height=7,
-                              Volume=8, Crown_mean_x=9, Crown_mean_y=10, Crown_top_x=11, Crown_top_y=12, Crown_top_z=13,
-                              mean_understory_height_in_5m_radius=14)
-
         tree_data = np.zeros((0, 15))
         radial_tree_aware_plot_cropping = False
         square_tree_aware_plot_cropping = False
         plot_centre = np.loadtxt(self.output_dir + 'plot_centre_coords.csv')
+        stem_points_sorted = np.zeros((0, len(list(self.stem_dict))))
+        veg_points_sorted = np.zeros((0, len(list(self.veg_dict))))
 
         if self.parameters['plot_radius'] > 0 and self.parameters['plot_radius_buffer'] > 0:
             print("Using tree aware plot cropping mode...")
@@ -888,164 +854,213 @@ class MeasureTree:
         elif self.parameters['square_grid_slicing_size'] > 0 and self.parameters['grid_buffer_distance'] > 0:
             square_tree_aware_plot_cropping = True
 
-        cleaned_cylinders = np.zeros((0, cleaned_cyls.shape[1]))
-        if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
-            kdtree = spatial.cKDTree(cleaned_cyls[:, :2], leafsize=1000)
-            results = kdtree.query(self.stem_points[:, :2], k=1)
-            mask = results[0] <= self.parameters['veg_sorting_range']
-            self.stem_points = self.stem_points[mask]
-            results = results[1][mask]
-            self.stem_points[:, self.stem_dict['tree_id']] = cleaned_cyls[results, self.cyl_dict['tree_id']]
+        print("Cylinder Outlier Removal...")
+        input_data = []
+        i = 0
+        tree_id_list = np.unique(interpolated_full_cyl_array[:, self.cyl_dict['tree_id']])
 
-        for tree_id in np.unique(cleaned_cyls[:, self.cyl_dict['tree_id']]):
-            tree = cleaned_cyls[cleaned_cyls[:, self.cyl_dict['tree_id']] == tree_id]
-            tree_vegetation = self.vegetation_points[self.vegetation_points[:, self.veg_dict['tree_id']] == tree_id]
-            combined = np.vstack((tree[:, :3], tree_vegetation[:, :3]))
-            combined = np.hstack((combined, np.zeros((combined.shape[0], 1))))
-            combined = get_heights_above_DTM(combined, self.DTM)
+        if tree_id_list.shape[0] > 0:  # TODO Add Watershed canopy segmentation or similar for when no trees are detected in a plot.
+            max_tree_id = int(np.max(tree_id_list))
+            for tree_id in tree_id_list:
+                if tree_id % 10 == 0:
+                    print('\r', tree_id, '/', max_tree_id, end='')
+                i += 1
+                single_tree = interpolated_full_cyl_array[
+                    interpolated_full_cyl_array[:, self.cyl_dict['tree_id']] == tree_id]
+                if single_tree.shape[0] > 0:
+                    single_tree = self.fix_outliers(single_tree)
+                    input_data.append([single_tree, self.parameters['cleaned_measurement_radius'], self.cyl_dict])
 
-            # Get highest point of tree. Note, there is usually noise, so we use the 98th percentile.
-            tree_max_point = combined[abs(combined[:, 2] - np.percentile(combined[:, 2], 98, interpolation='nearest')).argmin()]
+            print('\r', max_tree_id, '/', max_tree_id, end='')
+            print('\nDone\n')
 
-            tree_base_point = deepcopy(combined[np.argmin(combined[:, -1])])
-            z_tree_base = tree_base_point[2] - tree_base_point[-1]
-
-            tree_mean_position = np.mean(combined[:, :2], axis=0)
-            tree_height = tree_max_point[-1]
-            del combined
-
-            if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
-                tree_points = self.stem_points[self.stem_points[:, self.stem_dict['tree_id']] == tree_id]
-
-            base_northing = tree[np.argmin(tree[:, 2]), 0]
-            base_easting = tree[np.argmin(tree[:, 2]), 1]
-            DBH_slice = tree[np.logical_and(tree[:, self.cyl_dict['height_above_dtm']] >= 1.0,
-                                            tree[:, self.cyl_dict['height_above_dtm']] <= 1.6)]
-            DBH = 0
-            DBH_X = 0
-            DBH_Y = 0
-            DBH_Z = 0
-            if DBH_slice.shape[0] > 0:
-                DBH = np.around(np.mean(DBH_slice[:, self.cyl_dict['radius']]) * 2, 3)
-                DBH_X, DBH_Y, DBH_Z = np.mean(DBH_slice[:, :3], axis=0)
-                mean_CCI_at_BH = np.mean(DBH_slice[:, self.cyl_dict['CCI']])
-            volume = np.sum((np.pi * (tree[:, self.cyl_dict['radius']] ** 2)) * np.ceil(
-                    self.parameters['cleaned_measurement_radius'] * 10) / 10)
-            x_tree_base = base_northing
-            y_tree_base = base_easting
-            mean_vegetation_density_in_5m_radius = 0
-            mean_understory_height_in_5m_radius = 0
-            nearby_understory_points = self.ground_veg[ground_veg_kdtree.query_ball_point([DBH_X, DBH_Y], r=5)]
-
-            if nearby_understory_points.shape[0] > 0:
-                mean_understory_height_in_5m_radius = np.around(np.nanmean(nearby_understory_points[:, self.veg_dict['height_above_dtm']]), 2)
-            if tree.shape[0] > 0:
-                description = 'Tree ' + str(int(tree_id))
-                description = description + '\nDBH: ' + str(DBH) + ' m'
-                description = description + '\nVolume: ' + str(np.around(volume, 3)) + ' m^3'
-                description = description + '\nHeight: ' + str(np.around(tree_height, 3)) + ' m'
-                description = description + '\nMean Veg Density (5 m radius): ' + str(
-                        mean_vegetation_density_in_5m_radius) + ' units'
-                description = description + '\nMean Understory Height (5 m radius): ' + str(
-                        mean_understory_height_in_5m_radius) + ' m'
-
-                print(description)
-                this_trees_data = np.zeros((1, tree_data.shape[1]), dtype='object')
-                this_trees_data[:, tree_data_dict['Site']] = self.parameters['Site']
-                this_trees_data[:, tree_data_dict['PlotID']] = self.parameters['PlotID']
-                this_trees_data[:, tree_data_dict['treeNo']] = int(tree_id)
-                this_trees_data[:, tree_data_dict['x_tree_base']] = x_tree_base
-                this_trees_data[:, tree_data_dict['y_tree_base']] = y_tree_base
-                this_trees_data[:, tree_data_dict['z_tree_base']] = z_tree_base
-                this_trees_data[:, tree_data_dict['DBH']] = DBH
-                this_trees_data[:, tree_data_dict['Height']] = tree_height
-                this_trees_data[:, tree_data_dict['Volume']] = volume
-                this_trees_data[:, tree_data_dict['Crown_mean_x']] = tree_mean_position[0]
-                this_trees_data[:, tree_data_dict['Crown_mean_y']] = tree_mean_position[1]
-                this_trees_data[:, tree_data_dict['Crown_top_x']] = tree_max_point[0]
-                this_trees_data[:, tree_data_dict['Crown_top_y']] = tree_max_point[1]
-                this_trees_data[:, tree_data_dict['Crown_top_z']] = tree_max_point[2]
-                this_trees_data[:, tree_data_dict['mean_understory_height_in_5m_radius']] = mean_understory_height_in_5m_radius
-
-                text_size = 0.00256
-                line_height = 0.025
-                if DBH_X != 0 and DBH_Y != 0 and DBH_Z != 0 and x_tree_base != 0 and y_tree_base != 0:
-                    line0 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y + line_height, DBH_Z + line_height,
-                                                         DBH * 0.5, '            DIAM: ' + str(np.around(DBH, 2)) + 'm')
-                    line1 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y, DBH_Z, DBH * 0.5,
-                                                         '       CCI AT BH: ' + str(np.around(mean_CCI_at_BH, 2)))
-                    line2 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 2 * line_height,
-                                                         DBH_Z - 2 * line_height, DBH * 0.5,
-                                                         '          HEIGHT: ' + str(np.around(tree_height, 2)) + 'm')
-                    line3 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height,
-                                                         DBH_Z - 3 * line_height, DBH * 0.5,
-                                                         '          VOLUME: ' + str(np.around(volume, 2)) + 'm3')
-
-                    height_measurement_line = self.points_along_line(x_tree_base, y_tree_base, z_tree_base, x_tree_base,
-                                                                     y_tree_base, z_tree_base + tree_height,
-                                                                     resolution=0.025)
-
-                    dbh_circle_points = self.create_3d_circles_as_points_flat(DBH_X, DBH_Y, DBH_Z, DBH / 2,
-                                                                              circle_points=100)
-
-                    if radial_tree_aware_plot_cropping:
-                        if np.linalg.norm(np.array([x_tree_base, y_tree_base]) - np.array(plot_centre)) < self.parameters['plot_radius']:
-                            tree_data = np.vstack((tree_data, this_trees_data))
-                            if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
-                                stem_points_sorted = np.vstack((stem_points_sorted, tree_points))  # TODO make this separate loop as it will be faster.
-                            veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
-                            cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
-                            self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3,
-                                                               height_measurement_line, dbh_circle_points))
-                    elif square_tree_aware_plot_cropping:
-                        x_min_coord = plot_centre[0] - self.parameters['square_grid_slicing_size']/2
-                        x_max_coord = plot_centre[0] + self.parameters['square_grid_slicing_size']/2
-                        y_min_coord = plot_centre[1] - self.parameters['square_grid_slicing_size']/2
-                        y_max_coord = plot_centre[1] + self.parameters['square_grid_slicing_size']/2
-
-                        if x_tree_base >= x_min_coord and x_tree_base < x_max_coord and y_tree_base >= y_min_coord and y_tree_base < y_max_coord:
-                            if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
-                                stem_points_sorted = np.vstack((stem_points_sorted, tree_points))
-                            tree_data = np.vstack((tree_data, this_trees_data))
-                            veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
-                            cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
-                            self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3,
-                                                               height_measurement_line, dbh_circle_points))
-                    else:
-                        tree_data = np.vstack((tree_data, this_trees_data))
-                        if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
-                            stem_points_sorted = np.vstack((stem_points_sorted, tree_points))
-                        veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
-                        cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
-                        self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3,
-                                                           height_measurement_line, dbh_circle_points))
-
-        save_file(self.output_dir + 'text_point_cloud.las', self.text_point_cloud)
-        if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
-            if not self.parameters['minimise_output_size_mode']:
-                save_file(self.output_dir + 'stem_points_sorted.las', stem_points_sorted, headers_of_interest=list(self.stem_dict))
-
-        if not self.parameters['minimise_output_size_mode']:
-            save_file(self.output_dir + 'veg_points_sorted.las', veg_points_sorted, headers_of_interest=list(self.veg_dict))
-
-        if 1:
-            print("Making cleaned cylinder visualisation...")
+            print("Starting multithreaded cylinder cleaning/smoothing...")
             j = 0
-            cleaned_cyl_vis = []
-            max_j = np.shape(cleaned_cylinders)[0]
+            max_j = len(input_data)
+
+            cleaned_cyls_list = []
             with get_context("spawn").Pool(processes=self.num_procs) as pool:
-                for i in pool.imap_unordered(self.make_cyl_visualisation, cleaned_cylinders):
-                    cleaned_cyl_vis.append(i)
-                    if j % 100 == 0:
+                for i in pool.imap_unordered(MeasureTree.cylinder_cleaning_multithreaded, input_data):
+                    cleaned_cyls_list.append(i)
+                    if j % 11 == 0:
                         print('\r', j, '/', max_j, end='')
                     j += 1
-            cleaned_cyl_vis = np.vstack(cleaned_cyl_vis)
+            cleaned_cyls = np.vstack(cleaned_cyls_list)
+
+            del cleaned_cyls_list
             print('\r', max_j, '/', max_j, end='')
             print('\nDone\n')
 
-            print("\nSaving cylinder visualisation...")
-            save_file(self.output_dir + 'cleaned_cyl_vis.las', cleaned_cyl_vis,
+            save_file(self.output_dir + 'cleaned_cyls.las', cleaned_cyls,
                       headers_of_interest=list(self.cyl_dict))
+            cleaned_cylinders = np.zeros((0, cleaned_cyls.shape[1]))
+
+            print("Sorting vegetation...")
+            # Simple nearest neighbours vegetation sorting.
+            kdtree = spatial.cKDTree(cleaned_cyls[:, :2], leafsize=1000)
+            results = kdtree.query(self.vegetation_points[:, :2], k=1)
+            mask = results[0] <= self.parameters['veg_sorting_range']
+            self.vegetation_points = self.vegetation_points[mask]
+            results = results[1][mask]
+            self.vegetation_points[:, self.veg_dict['tree_id']] = cleaned_cyls[results, self.cyl_dict['tree_id']]
+
+            if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
+                kdtree = spatial.cKDTree(cleaned_cyls[:, :2], leafsize=1000)
+                results = kdtree.query(self.stem_points[:, :2], k=1)
+                mask = results[0] <= self.parameters['veg_sorting_range']
+                self.stem_points = self.stem_points[mask]
+                results = results[1][mask]
+                self.stem_points[:, self.stem_dict['tree_id']] = cleaned_cyls[results, self.cyl_dict['tree_id']]
+
+            for tree_id in np.unique(cleaned_cyls[:, self.cyl_dict['tree_id']]):
+                tree = cleaned_cyls[cleaned_cyls[:, self.cyl_dict['tree_id']] == tree_id]
+                tree_vegetation = self.vegetation_points[self.vegetation_points[:, self.veg_dict['tree_id']] == tree_id]
+                combined = np.vstack((tree[:, :3], tree_vegetation[:, :3]))
+                combined = np.hstack((combined, np.zeros((combined.shape[0], 1))))
+                combined = get_heights_above_DTM(combined, self.DTM)
+
+                # Get highest point of tree. Note, there is usually noise, so we use the 98th percentile.
+                tree_max_point = combined[abs(combined[:, 2] - np.percentile(combined[:, 2], 98, interpolation='nearest')).argmin()]
+
+                tree_base_point = deepcopy(combined[np.argmin(combined[:, -1])])
+                z_tree_base = tree_base_point[2] - tree_base_point[-1]
+
+                tree_mean_position = np.mean(combined[:, :2], axis=0)
+                tree_height = tree_max_point[-1]
+                del combined
+
+                if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
+                    tree_points = self.stem_points[self.stem_points[:, self.stem_dict['tree_id']] == tree_id]
+
+                base_northing = tree[np.argmin(tree[:, 2]), 0]
+                base_easting = tree[np.argmin(tree[:, 2]), 1]
+                DBH_slice = tree[np.logical_and(tree[:, self.cyl_dict['height_above_dtm']] >= 1.0,
+                                                tree[:, self.cyl_dict['height_above_dtm']] <= 1.6)]
+                DBH = 0
+                DBH_X = 0
+                DBH_Y = 0
+                DBH_Z = 0
+                if DBH_slice.shape[0] > 0:
+                    DBH = np.around(np.mean(DBH_slice[:, self.cyl_dict['radius']]) * 2, 3)
+                    DBH_X, DBH_Y, DBH_Z = np.mean(DBH_slice[:, :3], axis=0)
+                    mean_CCI_at_BH = np.mean(DBH_slice[:, self.cyl_dict['CCI']])
+                volume = np.sum((np.pi * (tree[:, self.cyl_dict['radius']] ** 2)) * np.ceil(
+                        self.parameters['cleaned_measurement_radius'] * 10) / 10)
+                x_tree_base = base_northing
+                y_tree_base = base_easting
+                mean_vegetation_density_in_5m_radius = 0
+                mean_understory_height_in_5m_radius = 0
+                nearby_understory_points = self.ground_veg[self.ground_veg_kdtree.query_ball_point([DBH_X, DBH_Y], r=5)]
+
+                if nearby_understory_points.shape[0] > 0:
+                    mean_understory_height_in_5m_radius = np.around(np.nanmean(nearby_understory_points[:, self.veg_dict['height_above_dtm']]), 2)
+                if tree.shape[0] > 0:
+                    description = 'Tree ' + str(int(tree_id))
+                    description = description + '\nDBH: ' + str(DBH) + ' m'
+                    description = description + '\nVolume: ' + str(np.around(volume, 3)) + ' m^3'
+                    description = description + '\nHeight: ' + str(np.around(tree_height, 3)) + ' m'
+                    description = description + '\nMean Veg Density (5 m radius): ' + str(
+                            mean_vegetation_density_in_5m_radius) + ' units'
+                    description = description + '\nMean Understory Height (5 m radius): ' + str(
+                            mean_understory_height_in_5m_radius) + ' m'
+
+                    print(description)
+                    this_trees_data = np.zeros((1, tree_data.shape[1]), dtype='object')
+                    this_trees_data[:, self.tree_data_dict['Site']] = self.parameters['Site']
+                    this_trees_data[:, self.tree_data_dict['PlotID']] = self.parameters['PlotID']
+                    this_trees_data[:, self.tree_data_dict['treeNo']] = int(tree_id)
+                    this_trees_data[:, self.tree_data_dict['x_tree_base']] = x_tree_base
+                    this_trees_data[:, self.tree_data_dict['y_tree_base']] = y_tree_base
+                    this_trees_data[:, self.tree_data_dict['z_tree_base']] = z_tree_base
+                    this_trees_data[:, self.tree_data_dict['DBH']] = DBH
+                    this_trees_data[:, self.tree_data_dict['Height']] = tree_height
+                    this_trees_data[:, self.tree_data_dict['Volume']] = volume
+                    this_trees_data[:, self.tree_data_dict['Crown_mean_x']] = tree_mean_position[0]
+                    this_trees_data[:, self.tree_data_dict['Crown_mean_y']] = tree_mean_position[1]
+                    this_trees_data[:, self.tree_data_dict['Crown_top_x']] = tree_max_point[0]
+                    this_trees_data[:, self.tree_data_dict['Crown_top_y']] = tree_max_point[1]
+                    this_trees_data[:, self.tree_data_dict['Crown_top_z']] = tree_max_point[2]
+                    this_trees_data[:, self.tree_data_dict['mean_understory_height_in_5m_radius']] = mean_understory_height_in_5m_radius
+
+                    text_size = 0.00256
+                    line_height = 0.025
+                    if DBH_X != 0 and DBH_Y != 0 and DBH_Z != 0 and x_tree_base != 0 and y_tree_base != 0:
+                        line0 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y + line_height, DBH_Z + line_height,
+                                                             DBH * 0.5, '            DIAM: ' + str(np.around(DBH, 2)) + 'm')
+                        line1 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y, DBH_Z, DBH * 0.5,
+                                                             '       CCI AT BH: ' + str(np.around(mean_CCI_at_BH, 2)))
+                        line2 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 2 * line_height,
+                                                             DBH_Z - 2 * line_height, DBH * 0.5,
+                                                             '          HEIGHT: ' + str(np.around(tree_height, 2)) + 'm')
+                        line3 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height,
+                                                             DBH_Z - 3 * line_height, DBH * 0.5,
+                                                             '          VOLUME: ' + str(np.around(volume, 2)) + 'm3')
+
+                        height_measurement_line = self.points_along_line(x_tree_base, y_tree_base, z_tree_base, x_tree_base,
+                                                                         y_tree_base, z_tree_base + tree_height,
+                                                                         resolution=0.025)
+
+                        dbh_circle_points = self.create_3d_circles_as_points_flat(DBH_X, DBH_Y, DBH_Z, DBH / 2,
+                                                                                  circle_points=100)
+
+                        if radial_tree_aware_plot_cropping:
+                            if np.linalg.norm(np.array([x_tree_base, y_tree_base]) - np.array(plot_centre)) < self.parameters['plot_radius']:
+                                tree_data = np.vstack((tree_data, this_trees_data))
+                                if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
+                                    stem_points_sorted = np.vstack((stem_points_sorted, tree_points))  # TODO make this separate loop as it will be faster.
+                                veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
+                                cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
+                                self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3,
+                                                                   height_measurement_line, dbh_circle_points))
+                        elif square_tree_aware_plot_cropping:
+                            x_min_coord = plot_centre[0] - self.parameters['square_grid_slicing_size']/2
+                            x_max_coord = plot_centre[0] + self.parameters['square_grid_slicing_size']/2
+                            y_min_coord = plot_centre[1] - self.parameters['square_grid_slicing_size']/2
+                            y_max_coord = plot_centre[1] + self.parameters['square_grid_slicing_size']/2
+
+                            if x_tree_base >= x_min_coord and x_tree_base < x_max_coord and y_tree_base >= y_min_coord and y_tree_base < y_max_coord:
+                                if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
+                                    stem_points_sorted = np.vstack((stem_points_sorted, tree_points))
+                                tree_data = np.vstack((tree_data, this_trees_data))
+                                veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
+                                cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
+                                self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3,
+                                                                   height_measurement_line, dbh_circle_points))
+                        else:
+                            tree_data = np.vstack((tree_data, this_trees_data))
+                            if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
+                                stem_points_sorted = np.vstack((stem_points_sorted, tree_points))
+                            veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
+                            cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
+                            self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3,
+                                                               height_measurement_line, dbh_circle_points))
+
+            save_file(self.output_dir + 'text_point_cloud.las', self.text_point_cloud)
+            if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
+                if not self.parameters['minimise_output_size_mode']:
+                    save_file(self.output_dir + 'stem_points_sorted.las', stem_points_sorted, headers_of_interest=list(self.stem_dict))
+
+            if not self.parameters['minimise_output_size_mode']:
+                save_file(self.output_dir + 'veg_points_sorted.las', veg_points_sorted, headers_of_interest=list(self.veg_dict))
+
+            if 1:
+                print("Making cleaned cylinder visualisation...")
+                j = 0
+                cleaned_cyl_vis = []
+                max_j = np.shape(cleaned_cylinders)[0]
+                with get_context("spawn").Pool(processes=self.num_procs) as pool:
+                    for i in pool.imap_unordered(self.make_cyl_visualisation, cleaned_cylinders):
+                        cleaned_cyl_vis.append(i)
+                        if j % 100 == 0:
+                            print('\r', j, '/', max_j, end='')
+                        j += 1
+                cleaned_cyl_vis = np.vstack(cleaned_cyl_vis)
+                print('\r', max_j, '/', max_j, end='')
+                print('\nDone\n')
+
+                print("\nSaving cylinder visualisation...")
+                save_file(self.output_dir + 'cleaned_cyl_vis.las', cleaned_cyl_vis,
+                          headers_of_interest=list(self.cyl_dict))
 
         if radial_tree_aware_plot_cropping and self.parameters['generate_output_point_cloud']:
             self.terrain_points = self.terrain_points[np.linalg.norm(self.terrain_points[:, :2]-plot_centre, axis=1) < self.parameters['plot_radius']]
@@ -1058,7 +1073,7 @@ class MeasureTree:
 
             save_file(self.output_dir + 'tree_aware_cropped_point_cloud.las', tree_aware_cropped_point_cloud, headers_of_interest=list(self.stem_dict))
 
-        if square_tree_aware_plot_cropping and self.parameters['generate_output_point_cloud']:
+        elif square_tree_aware_plot_cropping and self.parameters['generate_output_point_cloud']:
             x_min_coord = plot_centre[0] - self.parameters['square_grid_slicing_size'] / 2
             x_max_coord = plot_centre[0] + self.parameters['square_grid_slicing_size'] / 2
             y_min_coord = plot_centre[1] - self.parameters['square_grid_slicing_size'] / 2
@@ -1077,11 +1092,15 @@ class MeasureTree:
             self.DTM = self.DTM[np.logical_and(self.DTM[:, 1] >= y_min_coord, self.DTM[:, 1] < y_max_coord)]
 
             save_file(self.output_dir + 'cropped_DTM.las', self.DTM)
-            tree_aware_cropped_point_cloud = np.vstack((self.terrain_points, self.cwd_points, self.ground_veg, stem_points_sorted, veg_points_sorted))  # , stem_points_sorted, veg_points_sorted))
+            tree_aware_cropped_point_cloud = np.vstack((self.terrain_points, self.cwd_points, self.ground_veg, stem_points_sorted, veg_points_sorted))
 
             save_file(self.output_dir + 'tree_aware_cropped_point_cloud.las', tree_aware_cropped_point_cloud, headers_of_interest=list(self.stem_dict))
 
-        tree_data = pd.DataFrame(tree_data, columns=[i for i in tree_data_dict])
+        elif self.parameters['generate_output_point_cloud']:
+            tree_aware_cropped_point_cloud = np.vstack((self.terrain_points, self.cwd_points, self.ground_veg, stem_points_sorted, veg_points_sorted))
+            save_file(self.output_dir + 'tree_aware_cropped_point_cloud.las', tree_aware_cropped_point_cloud, headers_of_interest=list(self.stem_dict))
+
+        tree_data = pd.DataFrame(tree_data, columns=[i for i in self.tree_data_dict])
         tree_data.to_csv(self.output_dir + 'tree_data.csv', index=None, sep=',')
 
         hull = ConvexHull(self.DTM[:, :2])
@@ -1099,27 +1118,44 @@ class MeasureTree:
             processing_report['Plot Area'] = self.plot_area
             processing_report['Num Trees in Plot'] = tree_data.shape[0]
             processing_report['Stems/ha'] = round(tree_data.shape[0] / self.plot_area)
+            if tree_data.shape[0] > 0:
+                processing_report['Mean DBH'] = np.mean(tree_data['DBH'])
+                processing_report['Median DBH'] = np.median(tree_data['DBH'])
+                processing_report['Min DBH'] = np.min(tree_data['DBH'])
+                processing_report['Max DBH'] = np.max(tree_data['DBH'])
 
-            processing_report['Mean DBH'] = np.mean(tree_data['DBH'])
-            processing_report['Median DBH'] = np.median(tree_data['DBH'])
-            processing_report['Min DBH'] = np.min(tree_data['DBH'])
-            processing_report['Max DBH'] = np.max(tree_data['DBH'])
+                processing_report['Mean Height'] = np.mean(tree_data['Height'])
+                processing_report['Median Height'] = np.median(tree_data['Height'])
+                processing_report['Min Height'] = np.min(tree_data['Height'])
+                processing_report['Max Height'] = np.max(tree_data['Height'])
 
-            processing_report['Mean Height'] = np.mean(tree_data['Height'])
-            processing_report['Median Height'] = np.median(tree_data['Height'])
-            processing_report['Min Height'] = np.min(tree_data['Height'])
-            processing_report['Max Height'] = np.max(tree_data['Height'])
+                processing_report['Mean Volume'] = np.mean(tree_data['Volume'])
+                processing_report['Median Volume'] = np.median(tree_data['Volume'])
+                processing_report['Min Volume'] = np.min(tree_data['Volume'])
+                processing_report['Max Volume'] = np.max(tree_data['Volume'])
+                processing_report['Canopy Gap Fraction'] = self.canopy_area / self.ground_area
 
-            processing_report['Mean Volume'] = np.mean(tree_data['Volume'])
-            processing_report['Median Volume'] = np.median(tree_data['Volume'])
-            processing_report['Min Volume'] = np.min(tree_data['Volume'])
-            processing_report['Max Volume'] = np.max(tree_data['Volume'])
+            else:
+                processing_report['Mean DBH'] = 0
+                processing_report['Median DBH'] = 0
+                processing_report['Min DBH'] = 0
+                processing_report['Max DBH'] = 0
+
+                processing_report['Mean Height'] = 0
+                processing_report['Median Height'] = 0
+                processing_report['Min Height'] = 0
+                processing_report['Max Height'] = 0
+
+                processing_report['Mean Volume'] = 0
+                processing_report['Median Volume'] = 0
+                processing_report['Min Volume'] = 0
+                processing_report['Max Volume'] = 0
+                processing_report['Canopy Gap Fraction'] = 0
 
             processing_report['Avg Gradient'] = avg_gradient
             processing_report['Avg Gradient North'] = avg_gradient_north
             processing_report['Avg Gradient East'] = avg_gradient_east
 
-            processing_report['Canopy Gap Fraction'] = self.canopy_area / self.ground_area
             processing_report['Understory Veg Coverage Fraction'] = float(self.ground_veg_area) / float(self.ground_area)
             processing_report['CWD Coverage Fraction'] = self.measure_total_time
 

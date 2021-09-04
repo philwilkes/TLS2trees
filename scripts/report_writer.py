@@ -99,11 +99,17 @@ class ReportWriter:
         mdFile.new_header(level=level, title='Plot Radius: ' + str(
                 self.parameters['plot_radius']) + ' m, ' + ' Plot Radius Buffer: ' + str(
                 self.parameters['plot_radius_buffer']) + ' m, Plot Area: ' + str(np.around(self.plot_area, 3)) + ' ha')
-        mdFile.new_header(level=level, title='Stems/ha:  ' + str(self.stems_per_ha))
-        mdFile.new_header(level=level, title='Mean DBH: ' + str(np.around(np.mean(self.DBH), 3)) + ' m')
-        mdFile.new_header(level=level, title='Median DBH: ' + str(np.around(np.median(self.DBH), 3)) + ' m')
-        mdFile.new_header(level=level, title='Min DBH: ' + str(np.around(np.min(self.DBH), 3)) + ' m')
-        mdFile.new_header(level=level, title='Max DBH: ' + str(np.around(np.max(self.DBH), 3)) + ' m')
+
+        if self.DBH.shape[0] > 0:
+            mdFile.new_header(level=level, title='Stems/ha:  ' + str(self.stems_per_ha))
+            mdFile.new_header(level=level, title='Mean DBH: ' + str(np.around(np.mean(self.DBH), 3)) + ' m')
+            mdFile.new_header(level=level, title='Median DBH: ' + str(np.around(np.median(self.DBH), 3)) + ' m')
+            mdFile.new_header(level=level, title='Min DBH: ' + str(np.around(np.min(self.DBH), 3)) + ' m')
+            mdFile.new_header(level=level, title='Max DBH: ' + str(np.around(np.max(self.DBH), 3)) + ' m')
+
+        else:
+            mdFile.new_header(level=level, title='Stems/ha: 0')
+            mdFile.new_header(level=level, title='No stems found.')
 
         total_processing_time = float(self.processing_report['Preprocessing Time (s)']) + \
             float(self.processing_report['Semantic Segmentation Time (s)']) + \
@@ -245,6 +251,7 @@ class ReportWriter:
         ax1.scatter([0], [0], marker='x', s=40, c='blue', zorder=9)
 
         tree_label_offset = np.array([-0.01, 0.01]) * plot_max_distance
+
         for i in range(0, self.x_tree_base.shape[0]):
             ax1.text((self.x_tree_base[i] - plot_centre[0]) + tree_label_offset[0],
                      (self.y_tree_base[i] - plot_centre[1]) + tree_label_offset[1], self.treeNo[i], fontsize=6,
@@ -281,17 +288,17 @@ class ReportWriter:
         ax2.set_title("Diameter at Breast Height Distribution", fontsize=10)
         ax2.set_xlabel("DBH (m)")
         ax2.set_ylabel("Count")
+        if self.DBH.shape[0] > 0:
+            bin_width = 0.1
+            bins = np.arange(0, np.ceil(np.max(self.DBH) * 10) / 10 + bin_width, bin_width)
 
-        bin_width = 0.1
-        bins = np.arange(0, np.ceil(np.max(self.DBH) * 10) / 10 + bin_width, bin_width)
-
-        ax2.hist(self.DBH,
-                 bins=bins,
-                 range=(0, np.ceil(np.max(self.DBH) * 10) / 10 + bin_width),
-                 linewidth=0.5,
-                 edgecolor='black',
-                 facecolor='green')
-        fig2.show(False)
+            ax2.hist(self.DBH,
+                     bins=bins,
+                     range=(0, np.ceil(np.max(self.DBH) * 10) / 10 + bin_width),
+                     linewidth=0.5,
+                     edgecolor='black',
+                     facecolor='green')
+            fig2.show(False)
         fig2.savefig(self.output_dir + 'Diameter at Breast Height Distribution.png', dpi=600, bbox_inches='tight',
                      pad_inches=0.0)
         plt.close()
@@ -301,17 +308,17 @@ class ReportWriter:
         ax3.set_title("Tree Height Distribution", fontsize=10)
         ax3.set_xlabel("Height (m)")
         ax3.set_ylabel("Count")
+        if self.height.shape[0] > 0:
+            bin_width = 1
+            bins = np.arange(0, np.ceil(np.max(self.height)) + bin_width, bin_width)
 
-        bin_width = 1
-        bins = np.arange(0, np.ceil(np.max(self.height)) + bin_width, bin_width)
-
-        ax3.hist(self.height,
-                 bins=bins,
-                 range=(0, np.ceil(np.max(self.height))),
-                 linewidth=0.5,
-                 edgecolor='black',
-                 facecolor='green')
-        fig3.show(False)
+            ax3.hist(self.height,
+                     bins=bins,
+                     range=(0, np.ceil(np.max(self.height))),
+                     linewidth=0.5,
+                     edgecolor='black',
+                     facecolor='green')
+            fig3.show(False)
         fig3.savefig(self.output_dir + 'Tree Height Distribution.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
         plt.close()
 
@@ -320,17 +327,17 @@ class ReportWriter:
         ax4.set_title("Tree Volume Distribution", fontsize=10)
         ax4.set_xlabel("Volume (m^3)")
         ax4.set_ylabel("Count")
+        if self.Volume.shape[0]> 0:
+            bin_width = 0.1
+            bins = np.arange(0, np.ceil(np.max(self.Volume) * 10) / 10 + bin_width, bin_width)
 
-        bin_width = 0.1
-        bins = np.arange(0, np.ceil(np.max(self.Volume) * 10) / 10 + bin_width, bin_width)
-
-        ax4.hist(self.Volume,
-                 bins=bins,
-                 range=(0, np.ceil(np.max(self.Volume) * 10) / 10 + bin_width),
-                 linewidth=0.5,
-                 edgecolor='black',
-                 facecolor='green')
-        fig4.show(False)
+            ax4.hist(self.Volume,
+                     bins=bins,
+                     range=(0, np.ceil(np.max(self.Volume) * 10) / 10 + bin_width),
+                     linewidth=0.5,
+                     edgecolor='black',
+                     facecolor='green')
+            fig4.show(False)
         fig4.savefig(self.output_dir + 'Tree Volume Distribution.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
         plt.close()
 

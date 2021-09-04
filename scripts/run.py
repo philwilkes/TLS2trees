@@ -14,10 +14,10 @@ if __name__ == '__main__':
     If you have multiple point clouds and plot coords for each, you'll need to 
     
     """
-    # point_clouds_to_process = directory_mode()
+    point_clouds_to_process = directory_mode()
     # point_clouds_to_process = ['list your point cloud filepaths here']
     # point_clouds_to_process = ['E:/PFOlsen2/PFOlsenPlots/T1_class.las']
-    point_clouds_to_process = file_mode()
+    # point_clouds_to_process = file_mode()
 
     for point_cloud_filename in point_clouds_to_process:
         parameters = dict(point_cloud_filename=point_cloud_filename,
@@ -25,8 +25,8 @@ if __name__ == '__main__':
                           plot_centre=None,  # [X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the median XY coords of the point cloud.
 
                           # Circular Plot options - Leave at 0 if not using.
-                          plot_radius=20,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
-                          plot_radius_buffer=1,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
+                          plot_radius=0,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
+                          plot_radius_buffer=0,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
 
                           # Rectangular/Tiled Plot options - Leave at 0 if not using.
                           square_grid_slicing_size=0,  # NOT YET IMPLEMENTED
@@ -52,7 +52,7 @@ if __name__ == '__main__':
                           ground_veg_cutoff_height=3,  # Any vegetation points below this height are considered to be understory and are not assigned to individual trees.
                           veg_sorting_range=5,  # Vegetation points can be, at most, this far away from a cylinder horizontally to be matched to a particular tree.
                           stem_sorting_range=1,  # Stem points can be, at most, this far away from a cylinder in 3D to be matched to a particular tree.
-                          low_resolution_point_cloud_hack_mode=0,  # See README.md for details. Very ugly hack that can sometimes be useful on low resolution point clouds.
+                          low_resolution_point_cloud_hack_mode=0,  # See README.md for details. Very ugly hack that can sometimes be us-eful on low resolution point clouds.
                           maximum_stem_diameter=3,  # Any diameters greater than this will be deemed erroneous and deleted.
                           delete_working_directory=True,  # Generally leave this on. Deletes the files used for segmentation after segmentation is finished.
                                                           # You may wish to turn it off if you want to re-run/modify the segmentation code so you don't need to run pre-processing every time.

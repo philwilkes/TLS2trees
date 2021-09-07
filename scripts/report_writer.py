@@ -118,7 +118,7 @@ class ReportWriter:
 
         mdFile.new_header(level=level,
                           title='FSCT Processing Time: ' + str(np.around(total_processing_time / 60., 1)) + ' minutes')
-
+        # TODO Replace absolute paths with relative paths in Plot_report.html as links break when folders are moved but relative links would work.
         path = self.output_dir + "Stem_Map.png"
         mdFile.new_paragraph(Html.image(path=path, size='1000'))
 

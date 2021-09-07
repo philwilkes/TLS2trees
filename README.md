@@ -240,9 +240,12 @@ Young trees with a lot of branching do not currently get segmented correctly.
 Some large trees do not currently get measured properly as the rules don't always hold.
 
 FSCT is unlikely to output useful results on low resolution point clouds. 
-Very high resolution Aerial LiDAR is about the lowest it can currently cope with.
+*Very high* resolution Aerial LiDAR is about the lowest it can currently cope with. If your dataset is on the borderline,
+try setting low_resolution_point_cloud_hack_mode to 4 or 5 and rerunning. It's an ugly hack, but it can help sometimes.
 
 Small branches are often not detected.
+
+Completely horizontal branches/sections may not be measured correctly.
 
 ### Planned Solutions to these Limitations
 Additional training of the segmentation model to deal with younger trees and slightly lower resolution point clouds.
@@ -274,8 +277,10 @@ This research was funded by the Australian Research Council - Training Centre fo
 Thanks to my supervisory team Assoc. Prof Paul Turner and Dr. Mohammad Sadegh Taskhiri from the eLogistics Research
 Group and Dr. James Montgomery from the University of Tasmania.
 
-Thanks to Susana Gonzalez Aracil and David Herries from Interpine Group Ltd. (New Zealand), who provided a number of the raw point
-clouds and plot measurements used during the development and validation of this tool.
+Thanks to Susana Gonzalez Aracil and David Herries from Interpine Group Ltd (New Zealand) https://interpine.nz/, who provided a number of the raw point
+clouds and plot measurements used during the development and validation of this tool and to PF Olsen (Australia) Ltd https://au.pfolsen.com/ for
+providing an extensive reference dataset of 7022 destructively sampled diameter measurements and 49 associated point
+clouds used for evaluating this tool.
 
 
 ## Contributing

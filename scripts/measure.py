@@ -122,13 +122,13 @@ class MeasureTree:
 
         print(self.canopy_area, self.ground_area, "Canopy Gap Fraction:", self.canopy_area / self.ground_area)
 
-
-
-
-        self.cwd_points, headers_of_interest = load_file(self.output_dir + 'cwd_points.las',
-                                                         headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue',
-                                                                              'label', 'height_above_DTM'])
-        self.cwd_points = np.hstack((self.cwd_points, np.zeros((self.cwd_points.shape[0], 1))))
+        try:
+            self.cwd_points, headers_of_interest = load_file(self.output_dir + 'cwd_points.las',
+                                                             headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue',
+                                                                                  'label', 'height_above_DTM'])
+            self.cwd_points = np.hstack((self.cwd_points, np.zeros((self.cwd_points.shape[0], 1))))
+        except FileNotFoundError:
+            self.cwd_points = np.zeros((0, self.vegetation_points.shape[1]))
 
         self.text_point_cloud = np.zeros((0, 3))
         self.tree_measurements = np.zeros((0, 8))

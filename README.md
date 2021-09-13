@@ -18,6 +18,7 @@ This usage of this tool is intended to be accessable to as many people as possib
 one day turn this into a simple executable program to avoid the need for Python skills. If you know how to do this and 
 would like to help make it happen, please get in touch!
 
+https://www.youtube.com/watch?v=4kBeU3Wcz9k
 
 ## Installation
 
@@ -46,18 +47,19 @@ A summary of the information extracted. Nicer to look at than the processing rep
 Future versions will make this a bit nicer/add data tables/etc.
 
 **tree_data.csv**
-Basic measurements of the trees. 
+Basic measurements of the trees.
 Headings are as follows (all units are in metres or cubic metres for volume)
-[x_tree_base, y_tree_base, z_tree_base, DBH, Height, Volume, Crown_mean_x, Crown_mean_y, Crown_top_x, Crown_top_y, Crown_top_z, mean_understory_height_in_5m_radius]
+[x_tree_base, y_tree_base, z_tree_base, DBH, Height, Volume_1, Volume_2, Crown_mean_x, Crown_mean_y, Crown_top_x, Crown_top_y, Crown_top_z, mean_understory_height_in_5m_radius]
+*Volume_1 is the sum of the volume of the fitted cylinders. Volume_2 is the volume of a cone (with a base diameter equal to the DBH and height from 1.3 m up to the tree height) + 
+the volume of a cylinder (with a diameter of DBH and 1.3 m tall). This avoids the possibility of a short and shallow 
+angled cone resulting from a short tree with a large DBH.* 
 
 **processing_report.csv**
-Summary information about the plot and the processing times. 
-
-**plot_centre_coords.csv**
-The XY coordinates of the plot centre. *Will delete soon and just use processing_report for data storage.* 
+Summary information about the plot and the processing times. Be aware: if you open this while processing and FSCT
+attempts to write to the open file, it will throw a permission error.
 
 **plot_extents.csv**
-XY coordinates of a rectangle defined by the edges of the plot and the plot centre. *Note: may delete or replace this soon*
+Latitude and longitude coordinates of a rectangle defined by the edges of the plot and the plot centre.
 
 ![simple_outputs.png](readme_images/simple_outputs.png)
 
@@ -68,9 +70,8 @@ XY coordinates of a rectangle defined by the edges of the plot and the plot cent
 ![dtm1.png](readme_images/dtm1.png)
 
 **cropped_DTM.las** Digital Terrain Model cropped to the plot_radius.
-###
 
-**<PLOT_NAME>_working_point_cloud.las** The subsampled and cropped point cloud that is fed to the segmentation tool.
+**working_point_cloud.las** The subsampled and cropped point cloud that is fed to the segmentation tool.
 ![input_point_cloud.png](readme_images/input_point_cloud.png)
 
 **segmented.las** The classified point cloud created by the segmentation tool.
@@ -78,19 +79,15 @@ XY coordinates of a rectangle defined by the edges of the plot and the plot cent
 
 **segmented_cleaned.las** The cleaned segmented point cloud created during the post-processing step.
 
-**terrain_points.las**  Segmented terrain points.
+**terrain_points.las**  Semantically segmented terrain points.
 
-**vegetation_points.las** Segmented vegetation points.
+**vegetation_points.las** Semantically segmented vegetation points.
 
 **ground_veg.las** Ground vegetation points.
 
-**veg_points_sorted.las** Vegetation assigned by tree_id. Ground points are given a tree_id of 0.
+**cwd_points.las** Semantically segmented Coarse woody debris points.
 
-**cwd_points.las** Segmented Coarse woody debris points.
-
-**stem_points.las** Segmented stem points.
-
-**stem_points_sorted.las** Stem points assigned by tree_id.
+**stem_points.las** Semantically segmented stem points.
 
 **cleaned_cyls.las** Point-based cylinder representation with a variety of properties. 
 
@@ -99,8 +96,20 @@ Essentially makes circles out of points for every measurement in cleaned_cyls.
 
 ![cleaned_cyl_vis.png](readme_images/cleaned_cyl_vis.png)
 
-**text_point_cloud.las** A point cloud text visualisation of DBH, height, CCI at breast height. 
-It's a bit dodgy, but it works in any point cloud viewer.
+**stem_points_sorted.las** Stem points assigned by tree_id. **This is a simple output at the moment and will not give
+highly reliable results.** This current iteration may be useful for generating instance segmentation training datasets,
+however, this will likely require you to manually correct it to be of high enough quality for training data.
+
+**veg_points_sorted.las** Vegetation assigned by tree_id. Ground points are given a tree_id of 0. **This is a simple 
+output at the moment and will not give highly reliable results.** This current iteration may be useful for generating 
+instance segmentation training datasets, however, this will likely require you to manually correct it to be of high 
+enough quality for training data.
+
+
+
+
+**text_point_cloud.las** A point cloud text visualisation of TreeId, DBH, height, CCI at breast height, Volume_1 and 
+Volume_2. It's a bit dodgy, but it works in any point cloud viewer without fuss.
 
 **tree_aware_cropped_point_cloud.las** If you specify a plot_radius and a plot_radius_buffer, this will trim the point
 cloud to the plot_radius. See the **Tree Aware Plot Cropping** section in User Parameters for more information on this mode.
@@ -157,11 +166,9 @@ just inside the boundary may be cut in half.
 
 This mode is used if plot_radius is non-zero and plot_radius_buffer is non-zero.
 ### Other Parameters
-#### Site
-Enter the site name if you wish. Only used for report generation.
 
-#### PlotID
-Enter the plot name/ID if you wish. Only used for report generation.
+#### PlotId
+The "PlotId" is taken from the filename of the input point cloud, so name files accordingly.
 
 #### UTM_zone_number
 Optional: Set this or the Lat Lon outputs will be incorrect.
@@ -209,7 +216,6 @@ it was trained on. Once inference is complete, the original point cloud is retur
 Generally leave this on. Deletes the files used for segmentation after segmentation is finished.
 You may wish to turn it off if you want to re-run/modify the segmentation code so you don't need to run pre-processing every time.
 
-
 ## Scripts
 
 **run.py** This is how you should interface with the code base.
@@ -226,12 +232,12 @@ cloud into samples the segmentation model can work with.
 **inference.py** Performs the semantic segmentation on the samples and then reassembles them back into a full point
 cloud.
 
-**post_segmentation_script** Creates the Digital Terrain Model (DTM) and uses this and some basic rules to clean the
+**post_segmentation_script.py** Creates the Digital Terrain Model (DTM) and uses this and some basic rules to clean the
 segmented point cloud up. Creates the class specific point clouds (terrain, vegetation, CWD and stem points).
 
 **measure.py** Extracts measurements and metrics from the outputs of the post_segmentation_script.
 
-**report_writer** Summarises the measurements in a simple report format.
+**report_writer.py** Summarises the measurements in a simple report format.
 
 
 ## Known Limitations
@@ -243,15 +249,18 @@ FSCT is unlikely to output useful results on low resolution point clouds.
 *Very high* resolution Aerial LiDAR is about the lowest it can currently cope with. If your dataset is on the borderline,
 try setting low_resolution_point_cloud_hack_mode to 4 or 5 and rerunning. It's an ugly hack, but it can help sometimes.
 
+Segmentation does often miss some branches, but usually gets the bulk of them.
+
 Small branches are often not detected.
 
-Completely horizontal branches/sections may not be measured correctly.
+Completely horizontal branches/sections may not be measured correctly from the method used.
 
 ### Planned Solutions to these Limitations
 Additional training of the segmentation model to deal with younger trees and slightly lower resolution point clouds.
 
 Deep learning based cylinder fitting solution to handle greater diversity and complexity.
-
+A tiling mode will be developed to allow the automated input of larger point clouds and it will include the use of 
+the tree-aware-plot-cropping concept.
 
 ## Citation
 ### If you use this tool in published research, please cite:
@@ -277,15 +286,15 @@ This research was funded by the Australian Research Council - Training Centre fo
 Thanks to my supervisory team Assoc. Prof Paul Turner and Dr. Mohammad Sadegh Taskhiri from the eLogistics Research
 Group and Dr. James Montgomery from the University of Tasmania.
 
-Thanks to Susana Gonzalez Aracil and David Herries from Interpine Group Ltd (New Zealand) https://interpine.nz/, who provided a number of the raw point
-clouds and plot measurements used during the development and validation of this tool and to PF Olsen (Australia) Ltd https://au.pfolsen.com/ for
-providing an extensive reference dataset of 7022 destructively sampled diameter measurements and 49 associated point
-clouds used for evaluating this tool.
+Thanks to Susana Gonzalez Aracil, David Herries from Interpine Group Ltd (New Zealand) https://interpine.nz/, Allie 
+Muneri and Mohan Gurung from PF Olsen (Australia) Ltd. https://au.pfolsen.com/, who provided a number of the raw point
+clouds and plot measurements used during the development and validation of this tool.
 
 
-## Contributing
-Interested in contributing to this code? Get in touch! This code is likely far from optimal, so if you find errors or 
-have ideas/suggestions on improvements, they would be very welcome!
+## Contributing/Collaborating
+Interested in contributing to the FSCT project? Get in touch! This code is likely far from optimal, so if you find 
+errors or have ideas/suggestions on improvements/better practices, they would be very welcome!
+A long term goal is to make a simple executable file for the whole tool to further lower the barriers for usage.
 
 ## References
 The deep learning component uses Pytorch https://pytorch.org/ and Pytorch-Geometric 
@@ -296,4 +305,6 @@ Pointnet++ https://github.com/charlesq34/pointnet2 using the implementation in P
 provided here: https://github.com/rusty1s/pytorch_geometric/blob/master/examples/pointnet2_segmentation.py
 
 We make extensive use of NumPy (Harris, C.R., Millman, K.J., van der Walt, S.J. et al. Array programming with NumPy.
-Nature 585, 357–362 (2020). https://doi.org/10.1038/s41586-020-2649-2) and Scikit Learn (Scikit-learn: Machine Learning in Python, Pedregosa et al., JMLR 12, pp. 2825-2830, 2011. http://jmlr.csail.mit.edu/papers/v12/pedregosa11a.html)
+Nature 585, 357–362 (2020). https://doi.org/10.1038/s41586-020-2649-2) and Scikit Learn (Scikit-learn: Machine Learning
+in Python, Pedregosa et al., JMLR 12, pp. 2825-2830, 2011. http://jmlr.csail.mit.edu/papers/v12/pedregosa11a.html)
+*If I have missed a reference, please get in touch and I will add it in.*

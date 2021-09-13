@@ -67,9 +67,9 @@ class MeasureTree:
 
         self.veg_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, label=6, height_above_dtm=7, tree_id=8)
         self.stem_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, label=6, height_above_dtm=7, tree_id=8)
-        self.tree_data_dict = dict(Site=0, PlotID=1, treeNo=2, x_tree_base=3, y_tree_base=4, z_tree_base=5, DBH=6,
-                                   Height=7,
-                                   Volume=8, Crown_mean_x=9, Crown_mean_y=10, Crown_top_x=11, Crown_top_y=12,
+        self.tree_data_dict = dict(PlotId=0, TreeId=1, x_tree_base=2, y_tree_base=3, z_tree_base=4, DBH=5,
+                                   Height=6,
+                                   Volume_1=7, Volume_2=8, Crown_mean_x=9, Crown_mean_y=10, Crown_top_x=11, Crown_top_y=12,
                                    Crown_top_z=13,
                                    mean_understory_height_in_5m_radius=14)
         self.terrain_points, headers_of_interest = load_file(self.output_dir + 'terrain_points.las',
@@ -843,7 +843,8 @@ class MeasureTree:
         tree_data = np.zeros((0, 15))
         radial_tree_aware_plot_cropping = False
         square_tree_aware_plot_cropping = False
-        plot_centre = np.loadtxt(self.output_dir + 'plot_centre_coords.csv')
+        plot_centre = [[float(self.processing_report['Plot Centre Northing']), float(self.processing_report['Plot Centre Easting'])]]
+
         stem_points_sorted = np.zeros((0, len(list(self.stem_dict))))
         veg_points_sorted = np.zeros((0, len(list(self.veg_dict))))
 
@@ -859,7 +860,7 @@ class MeasureTree:
         i = 0
         tree_id_list = np.unique(interpolated_full_cyl_array[:, self.cyl_dict['tree_id']])
 
-        if tree_id_list.shape[0] > 0:  # TODO Add Watershed canopy segmentation or similar for when no trees are detected in a plot.
+        if tree_id_list.shape[0] > 0:
             max_tree_id = int(np.max(tree_id_list))
             for tree_id in tree_id_list:
                 if tree_id % 10 == 0:
@@ -944,8 +945,11 @@ class MeasureTree:
                     DBH = np.around(np.mean(DBH_slice[:, self.cyl_dict['radius']]) * 2, 3)
                     DBH_X, DBH_Y, DBH_Z = np.mean(DBH_slice[:, :3], axis=0)
                     mean_CCI_at_BH = np.mean(DBH_slice[:, self.cyl_dict['CCI']])
-                volume = np.sum((np.pi * (tree[:, self.cyl_dict['radius']] ** 2)) * np.ceil(
+                volume_1 = np.sum((np.pi * (tree[:, self.cyl_dict['radius']] ** 2)) * np.ceil(
                         self.parameters['cleaned_measurement_radius'] * 10) / 10)
+
+                volume_2 = np.pi * ((DBH/2) ** 2) * (((tree_height - 1.3)/3) + 1.3)  # Volume of cone from DBH to treetop + volume of cylinder from DBH to ground.
+
                 x_tree_base = base_northing
                 y_tree_base = base_easting
                 mean_vegetation_density_in_5m_radius = 0
@@ -957,7 +961,8 @@ class MeasureTree:
                 if tree.shape[0] > 0:
                     description = 'Tree ' + str(int(tree_id))
                     description = description + '\nDBH: ' + str(DBH) + ' m'
-                    description = description + '\nVolume: ' + str(np.around(volume, 3)) + ' m^3'
+                    description = description + '\nVolume: ' + str(np.around(volume_1, 3)) + ' m^3'
+                    description = description + '\nVolume 2: ' + str(np.around(volume_2, 3)) + ' m^3'
                     description = description + '\nHeight: ' + str(np.around(tree_height, 3)) + ' m'
                     description = description + '\nMean Veg Density (5 m radius): ' + str(
                             mean_vegetation_density_in_5m_radius) + ' units'
@@ -966,15 +971,15 @@ class MeasureTree:
 
                     print(description)
                     this_trees_data = np.zeros((1, tree_data.shape[1]), dtype='object')
-                    this_trees_data[:, self.tree_data_dict['Site']] = self.parameters['Site']
-                    this_trees_data[:, self.tree_data_dict['PlotID']] = self.parameters['PlotID']
-                    this_trees_data[:, self.tree_data_dict['treeNo']] = int(tree_id)
+                    this_trees_data[:, self.tree_data_dict['PlotId']] = self.processing_report['PlotId']
+                    this_trees_data[:, self.tree_data_dict['TreeId']] = int(tree_id)
                     this_trees_data[:, self.tree_data_dict['x_tree_base']] = x_tree_base
                     this_trees_data[:, self.tree_data_dict['y_tree_base']] = y_tree_base
                     this_trees_data[:, self.tree_data_dict['z_tree_base']] = z_tree_base
                     this_trees_data[:, self.tree_data_dict['DBH']] = DBH
                     this_trees_data[:, self.tree_data_dict['Height']] = tree_height
-                    this_trees_data[:, self.tree_data_dict['Volume']] = volume
+                    this_trees_data[:, self.tree_data_dict['Volume_1']] = volume_1
+                    this_trees_data[:, self.tree_data_dict['Volume_2']] = volume_2
                     this_trees_data[:, self.tree_data_dict['Crown_mean_x']] = tree_mean_position[0]
                     this_trees_data[:, self.tree_data_dict['Crown_mean_y']] = tree_mean_position[1]
                     this_trees_data[:, self.tree_data_dict['Crown_top_x']] = tree_max_point[0]
@@ -985,16 +990,12 @@ class MeasureTree:
                     text_size = 0.00256
                     line_height = 0.025
                     if DBH_X != 0 and DBH_Y != 0 and DBH_Z != 0 and x_tree_base != 0 and y_tree_base != 0:
-                        line0 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y + line_height, DBH_Z + line_height,
-                                                             DBH * 0.5, '            DIAM: ' + str(np.around(DBH, 2)) + 'm')
-                        line1 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y, DBH_Z, DBH * 0.5,
-                                                             '       CCI AT BH: ' + str(np.around(mean_CCI_at_BH, 2)))
-                        line2 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 2 * line_height,
-                                                             DBH_Z - 2 * line_height, DBH * 0.5,
-                                                             '          HEIGHT: ' + str(np.around(tree_height, 2)) + 'm')
-                        line3 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height,
-                                                             DBH_Z - 3 * line_height, DBH * 0.5,
-                                                             '          VOLUME: ' + str(np.around(volume, 2)) + 'm3')
+                        tree_id = self.point_cloud_annotations(text_size, DBH_X, DBH_Y + 2 * line_height, DBH_Z + 2 * line_height, DBH * 0.5, '         TREE ID: ' + str(int(tree_id)))
+                        line0 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y + line_height, DBH_Z + line_height, DBH * 0.5, '            DIAM: ' + str(np.around(DBH, 2)) + 'm')
+                        line1 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y, DBH_Z, DBH * 0.5, '       CCI AT BH: ' + str(np.around(mean_CCI_at_BH, 2)))
+                        line2 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 2 * line_height, DBH_Z - 2 * line_height, DBH * 0.5, '          HEIGHT: ' + str(np.around(tree_height, 2)) + 'm')
+                        line3 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 3 * line_height, DBH_Z - 3 * line_height, DBH * 0.5, '          VOLUME 1: ' + str(np.around(volume_1, 2)) + 'm3')
+                        line4 = self.point_cloud_annotations(text_size, DBH_X, DBH_Y - 4 * line_height, DBH_Z - 4 * line_height, DBH * 0.5, '          VOLUME 2: ' + str(np.around(volume_2, 2)) + 'm3')
 
                         height_measurement_line = self.points_along_line(x_tree_base, y_tree_base, z_tree_base, x_tree_base,
                                                                          y_tree_base, z_tree_base + tree_height,
@@ -1010,7 +1011,7 @@ class MeasureTree:
                                     stem_points_sorted = np.vstack((stem_points_sorted, tree_points))  # TODO make this separate loop as it will be faster.
                                 veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
                                 cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
-                                self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3,
+                                self.text_point_cloud = np.vstack((self.text_point_cloud, tree_id, line0, line1, line2, line3, line4,
                                                                    height_measurement_line, dbh_circle_points))
                         elif square_tree_aware_plot_cropping:
                             x_min_coord = plot_centre[0] - self.parameters['square_grid_slicing_size']/2
@@ -1024,16 +1025,18 @@ class MeasureTree:
                                 tree_data = np.vstack((tree_data, this_trees_data))
                                 veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
                                 cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
-                                self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3,
-                                                                   height_measurement_line, dbh_circle_points))
+                                self.text_point_cloud = np.vstack(
+                                        (self.text_point_cloud, tree_id, line0, line1, line2, line3,
+                                         height_measurement_line, dbh_circle_points))
                         else:
                             tree_data = np.vstack((tree_data, this_trees_data))
                             if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
                                 stem_points_sorted = np.vstack((stem_points_sorted, tree_points))
                             veg_points_sorted = np.vstack((veg_points_sorted, tree_vegetation))
                             cleaned_cylinders = np.vstack((cleaned_cylinders, tree))
-                            self.text_point_cloud = np.vstack((self.text_point_cloud, line0, line1, line2, line3,
-                                                               height_measurement_line, dbh_circle_points))
+                            self.text_point_cloud = np.vstack(
+                                    (self.text_point_cloud, tree_id, line0, line1, line2, line3,
+                                     height_measurement_line, dbh_circle_points))
 
             save_file(self.output_dir + 'text_point_cloud.las', self.text_point_cloud)
             if self.parameters['sort_stems'] or self.parameters['generate_output_point_cloud']:
@@ -1103,8 +1106,12 @@ class MeasureTree:
         tree_data = pd.DataFrame(tree_data, columns=[i for i in self.tree_data_dict])
         tree_data.to_csv(self.output_dir + 'tree_data.csv', index=None, sep=',')
 
-        hull = ConvexHull(self.DTM[:, :2])
-        self.plot_area = np.around(hull.volume / 10000, 3)
+        if float(self.processing_report['Plot Radius']) == 0:  # if not a circular cropped plot, use a convex hull wrapped around the DTM boundary as the plot area.
+            hull = ConvexHull(self.DTM[:, :2])
+            self.plot_area = np.around(hull.volume / 10000, 3)  # in hectares
+        else:
+            self.plot_area = np.around((np.pi * self.processing_report['Plot Radius']**2) / 10000, 3)  # in hectares
+
         plane = Plane.best_fit(self.DTM)
         avg_gradient = self.compute_angle(plane.normal, [0, 0, 1])
         avg_gradient_north = self.compute_angle(plane.normal[[0, 2]], [0, 1])
@@ -1112,55 +1119,62 @@ class MeasureTree:
         self.measure_time_end = time.time()
         self.measure_total_time = self.measure_time_end - self.measure_time_start
 
-        try:
-            processing_report = pd.read_csv(self.output_dir + 'processing_report.csv', index_col=None)
-            processing_report['Measurement Time (s)'] = self.measure_total_time
-            processing_report['Plot Area'] = self.plot_area
-            processing_report['Num Trees in Plot'] = tree_data.shape[0]
-            processing_report['Stems/ha'] = round(tree_data.shape[0] / self.plot_area)
-            if tree_data.shape[0] > 0:
-                processing_report['Mean DBH'] = np.mean(tree_data['DBH'])
-                processing_report['Median DBH'] = np.median(tree_data['DBH'])
-                processing_report['Min DBH'] = np.min(tree_data['DBH'])
-                processing_report['Max DBH'] = np.max(tree_data['DBH'])
+        self.processing_report['Measurement Time (s)'] = self.measure_total_time
+        self.processing_report['Total Run Time (s)'] = self.processing_report['Preprocessing Time (s)'] + self.processing_report['Semantic Segmentation Time (s)'] + self.processing_report['Post processing time (s)'] + self.processing_report['Measurement Time (s)']
 
-                processing_report['Mean Height'] = np.mean(tree_data['Height'])
-                processing_report['Median Height'] = np.median(tree_data['Height'])
-                processing_report['Min Height'] = np.min(tree_data['Height'])
-                processing_report['Max Height'] = np.max(tree_data['Height'])
+        self.processing_report['Plot Area'] = self.plot_area
+        self.processing_report['Num Trees in Plot'] = tree_data.shape[0]
+        self.processing_report['Stems/ha'] = round(tree_data.shape[0] / self.plot_area)
 
-                processing_report['Mean Volume'] = np.mean(tree_data['Volume'])
-                processing_report['Median Volume'] = np.median(tree_data['Volume'])
-                processing_report['Min Volume'] = np.min(tree_data['Volume'])
-                processing_report['Max Volume'] = np.max(tree_data['Volume'])
-                processing_report['Canopy Gap Fraction'] = self.canopy_area / self.ground_area
+        if tree_data.shape[0] > 0:
+            self.processing_report['Mean DBH'] = np.mean(tree_data['DBH'])
+            self.processing_report['Median DBH'] = np.median(tree_data['DBH'])
+            self.processing_report['Min DBH'] = np.min(tree_data['DBH'])
+            self.processing_report['Max DBH'] = np.max(tree_data['DBH'])
 
-            else:
-                processing_report['Mean DBH'] = 0
-                processing_report['Median DBH'] = 0
-                processing_report['Min DBH'] = 0
-                processing_report['Max DBH'] = 0
+            self.processing_report['Mean Height'] = np.mean(tree_data['Height'])
+            self.processing_report['Median Height'] = np.median(tree_data['Height'])
+            self.processing_report['Min Height'] = np.min(tree_data['Height'])
+            self.processing_report['Max Height'] = np.max(tree_data['Height'])
 
-                processing_report['Mean Height'] = 0
-                processing_report['Median Height'] = 0
-                processing_report['Min Height'] = 0
-                processing_report['Max Height'] = 0
+            self.processing_report['Mean Volume 1'] = np.mean(tree_data['Volume_1'])
+            self.processing_report['Median Volume 1'] = np.median(tree_data['Volume_1'])
+            self.processing_report['Min Volume 1'] = np.min(tree_data['Volume_1'])
+            self.processing_report['Max Volume 1'] = np.max(tree_data['Volume_1'])
+            self.processing_report['Total Volume 1'] = np.max(tree_data['Volume_1'])
 
-                processing_report['Mean Volume'] = 0
-                processing_report['Median Volume'] = 0
-                processing_report['Min Volume'] = 0
-                processing_report['Max Volume'] = 0
-                processing_report['Canopy Gap Fraction'] = 0
+            self.processing_report['Mean Volume 2'] = np.mean(tree_data['Volume_2'])
+            self.processing_report['Median Volume 2'] = np.median(tree_data['Volume_2'])
+            self.processing_report['Min Volume 2'] = np.min(tree_data['Volume_2'])
+            self.processing_report['Max Volume 2'] = np.max(tree_data['Volume_2'])
+            self.processing_report['Total Volume 2'] = np.max(tree_data['Volume_2'])
 
-            processing_report['Avg Gradient'] = avg_gradient
-            processing_report['Avg Gradient North'] = avg_gradient_north
-            processing_report['Avg Gradient East'] = avg_gradient_east
+            self.processing_report['Canopy Gap Fraction'] = self.canopy_area / self.ground_area
 
-            processing_report['Understory Veg Coverage Fraction'] = float(self.ground_veg_area) / float(self.ground_area)
-            processing_report['CWD Coverage Fraction'] = self.measure_total_time
+        else:
+            self.processing_report['Mean DBH'] = 0
+            self.processing_report['Median DBH'] = 0
+            self.processing_report['Min DBH'] = 0
+            self.processing_report['Max DBH'] = 0
 
-            processing_report.to_csv(self.output_dir + 'processing_report.csv', index=False)
-            print("Measuring plot took", self.measure_total_time, 's')
-        except FileNotFoundError:
-            print("processing_report.csv file not found.")
+            self.processing_report['Mean Height'] = 0
+            self.processing_report['Median Height'] = 0
+            self.processing_report['Min Height'] = 0
+            self.processing_report['Max Height'] = 0
+
+            self.processing_report['Mean Volume'] = 0
+            self.processing_report['Median Volume'] = 0
+            self.processing_report['Min Volume'] = 0
+            self.processing_report['Max Volume'] = 0
+            self.processing_report['Canopy Gap Fraction'] = 0
+
+        self.processing_report['Avg Gradient'] = avg_gradient
+        self.processing_report['Avg Gradient North'] = avg_gradient_north
+        self.processing_report['Avg Gradient East'] = avg_gradient_east
+
+        self.processing_report['Understory Veg Coverage Fraction'] = float(self.ground_veg_area) / float(self.ground_area)
+        self.processing_report['CWD Coverage Fraction'] = self.measure_total_time
+
+        self.processing_report.to_csv(self.output_dir + 'processing_report.csv', index=False)
+        print("Measuring plot took", self.measure_total_time, 's')
         print("Measuring plot done.")

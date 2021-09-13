@@ -32,12 +32,13 @@ class ReportWriter:
         self.parameters['UTM_zone_number'] = float(self.processing_report['UTM Zone'])
 
         self.tree_data = pd.read_csv(self.output_dir + 'tree_data.csv')
-        self.treeNo = np.array(self.tree_data['treeNo'])
+        self.TreeId = np.array(self.tree_data['TreeId'])
         self.x_tree_base = np.array(self.tree_data['x_tree_base'])
         self.y_tree_base = np.array(self.tree_data['y_tree_base'])
         self.DBH = np.array(self.tree_data['DBH'])
         self.height = np.array(self.tree_data['Height'])
-        self.Volume = np.array(self.tree_data['Volume'])
+        self.Volume_1 = np.array(self.tree_data['Volume_1'])
+        self.Volume_2 = np.array(self.tree_data['Volume_2'])
 
         self.plot_centre_lat, self.plot_centre_lon = utm.to_latlon(easting=self.parameters['plot_centre'][0],
                                                                    northing=self.parameters['plot_centre'][1],
@@ -57,12 +58,18 @@ class ReportWriter:
                            'stem_points.las',
                            'segmented.las',
                            'ground_veg.las',
-                           'plot_centre_coords.csv',
                            'Plot_Report.md',
                            self.filename[:-4] + '_working_point_cloud.las']
 
-        if self.parameters['plot_radius'] != 0 and self.parameters['plot_radius_buffer'] != 0:
-            files_to_delete.append('segmented_cleaned.las')
+        files_to_delete = ['terrain_points.las',
+                           'vegetation_points.las',
+                           'cwd_points.las',
+                           'stem_points.las',
+                           'segmented.las',
+                           'ground_veg.las',
+                           'Plot_Report.md',
+                           'plot_centre_coords.csv',
+                           self.filename[:-4] + '_working_point_cloud.las']
 
         for file in files_to_delete:
             try:
@@ -85,8 +92,6 @@ class ReportWriter:
             hemisphere = 'South'
         level = 2
 
-        mdFile.new_header(level=level,
-                          title='Plot ID: ' + str(self.parameters['PlotID']) + ' Site: ' + str(self.parameters['Site']))
         mdFile.new_header(level=level, title='Point Cloud Filename: ' + self.filename)
         mdFile.new_header(level=level,
                           title='Plot Centre: ' + str(np.around(self.parameters['plot_centre'][0], 2)) + ' N, ' + str(
@@ -107,14 +112,14 @@ class ReportWriter:
             mdFile.new_header(level=level, title='Min DBH: ' + str(np.around(np.min(self.DBH), 3)) + ' m')
             mdFile.new_header(level=level, title='Max DBH: ' + str(np.around(np.max(self.DBH), 3)) + ' m')
 
+            mdFile.new_header(level=level, title='Total Plot Stem Volume 1: ' + str(np.around(np.sum(self.Volume_1), 3)) + ' m3')
+            mdFile.new_header(level=level, title='Total Plot Stem Volume 2: ' + str(np.around(np.sum(self.Volume_2), 3)) + ' m3')
+
         else:
             mdFile.new_header(level=level, title='Stems/ha: 0')
             mdFile.new_header(level=level, title='No stems found.')
 
-        total_processing_time = float(self.processing_report['Preprocessing Time (s)']) + \
-            float(self.processing_report['Semantic Segmentation Time (s)']) + \
-            float(self.processing_report['Post processing time (s)']) + \
-            float(self.processing_report['Measurement Time (s)'])
+        total_processing_time = float(self.processing_report['Total Run Time (s)'])
 
         mdFile.new_header(level=level,
                           title='FSCT Processing Time: ' + str(np.around(total_processing_time / 60., 1)) + ' minutes')
@@ -128,7 +133,10 @@ class ReportWriter:
         path = self.output_dir + "Tree Height Distribution.png"
         mdFile.new_paragraph(Html.image(path=path, size='1000'))
 
-        path = self.output_dir + "Tree Volume Distribution.png"
+        path = self.output_dir + "Tree Volume 1 Distribution.png"
+        mdFile.new_paragraph(Html.image(path=path, size='1000'))
+
+        path = self.output_dir + "Tree Volume 2 Distribution.png"
         mdFile.new_paragraph(Html.image(path=path, size='1000'))
 
         mdFile.create_md_file()
@@ -143,8 +151,6 @@ class ReportWriter:
         self.veg_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, tree_id=6, height_above_dtm=7)
         self.ground_veg, _ = load_file(self.output_dir + 'ground_veg.las', headers_of_interest=list(self.veg_dict))
         self.kml = simplekml.Kml()
-
-
 
         self.ground_veg_map = self.ground_veg[:, [0, 1, self.veg_dict['height_above_dtm']]]
         self.ground_veg_map[self.ground_veg[:, self.veg_dict['height_above_dtm']] >= 0.5, 2] = 1
@@ -194,7 +200,7 @@ class ReportWriter:
 
         fig1 = plt.figure(figsize=(7, 7))
         ax1 = fig1.add_subplot(1, 1, 1)
-        ax1.set_title("Plot Map")
+        ax1.set_title("Plot Map - " + self.filename[:-4])
         ax1.set_xlabel("Easting + " + str(np.around(self.parameters['plot_centre'][0], 2)) + ' (m)')
         ax1.set_ylabel("Northing + " + str(np.around(self.parameters['plot_centre'][1], 2)) + ' (m)')
         ax1.axis('equal')
@@ -254,7 +260,7 @@ class ReportWriter:
 
         for i in range(0, self.x_tree_base.shape[0]):
             ax1.text((self.x_tree_base[i] - plot_centre[0]) + tree_label_offset[0],
-                     (self.y_tree_base[i] - plot_centre[1]) + tree_label_offset[1], self.treeNo[i], fontsize=6,
+                     (self.y_tree_base[i] - plot_centre[1]) + tree_label_offset[1], self.TreeId[i], fontsize=6,
                      zorder=10)
 
         xmin = (np.min(self.DTM[:, 0]) - plot_centre[0])
@@ -324,20 +330,39 @@ class ReportWriter:
 
         fig4 = plt.figure(figsize=(7, 7))
         ax4 = fig4.add_subplot(1, 1, 1)
-        ax4.set_title("Tree Volume Distribution", fontsize=10)
-        ax4.set_xlabel("Volume (m^3)")
+        ax4.set_title("Tree Volume 1 Distribution", fontsize=10)
+        ax4.set_xlabel("Volume 1 (m^3)")
         ax4.set_ylabel("Count")
-        if self.Volume.shape[0]> 0:
+        if self.Volume_1.shape[0] > 0:
             bin_width = 0.1
-            bins = np.arange(0, np.ceil(np.max(self.Volume) * 10) / 10 + bin_width, bin_width)
+            bins = np.arange(0, np.ceil(np.max(self.Volume_1) * 10) / 10 + bin_width, bin_width)
 
-            ax4.hist(self.Volume,
+            ax4.hist(self.Volume_1,
                      bins=bins,
-                     range=(0, np.ceil(np.max(self.Volume) * 10) / 10 + bin_width),
+                     range=(0, np.ceil(np.max(self.Volume_1) * 10) / 10 + bin_width),
                      linewidth=0.5,
                      edgecolor='black',
                      facecolor='green')
             fig4.show(False)
-        fig4.savefig(self.output_dir + 'Tree Volume Distribution.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
+        fig4.savefig(self.output_dir + 'Tree Volume 1 Distribution.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
+        plt.close()
+
+        fig4 = plt.figure(figsize=(7, 7))
+        ax4 = fig4.add_subplot(1, 1, 1)
+        ax4.set_title("Tree Volume 2 Distribution", fontsize=10)
+        ax4.set_xlabel("Volume 2 (m^3)")
+        ax4.set_ylabel("Count")
+        if self.Volume_2.shape[0] > 0:
+            bin_width = 0.1
+            bins = np.arange(0, np.ceil(np.max(self.Volume_2) * 10) / 10 + bin_width, bin_width)
+
+            ax4.hist(self.Volume_2,
+                     bins=bins,
+                     range=(0, np.ceil(np.max(self.Volume_2) * 10) / 10 + bin_width),
+                     linewidth=0.5,
+                     edgecolor='black',
+                     facecolor='green')
+            fig4.show(False)
+        fig4.savefig(self.output_dir + 'Tree Volume 2 Distribution.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
         plt.close()
 

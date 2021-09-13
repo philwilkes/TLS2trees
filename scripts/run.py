@@ -20,55 +20,53 @@ if __name__ == '__main__':
     point_clouds_to_process = file_mode()
 
     for point_cloud_filename in point_clouds_to_process:
-        try:
-            parameters = dict(point_cloud_filename=point_cloud_filename,
-                              # Adjust if needed
-                              plot_centre=None,  # [X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the median XY coords of the point cloud.
+        # try:
+        parameters = dict(point_cloud_filename=point_cloud_filename,
+                          # Adjust if needed
+                          plot_centre=None,  # [X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the median XY coords of the point cloud.
 
-                              # Circular Plot options - Leave at 0 if not using.
-                              plot_radius=20,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
-                              plot_radius_buffer=3,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
+                          # Circular Plot options - Leave at 0 if not using.
+                          plot_radius=3,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
+                          plot_radius_buffer=2,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
 
-                              # Rectangular/Tiled Plot options - Leave at 0 if not using.
-                              square_grid_slicing_size=0,  # NOT YET IMPLEMENTED
-                              grid_buffer_distance=0,  # NOT YET IMPLEMENTED
+                          # Rectangular/Tiled Plot options - Leave at 0 if not using.
+                          square_grid_slicing_size=0,  # NOT YET IMPLEMENTED
+                          grid_buffer_distance=0,  # NOT YET IMPLEMENTED
 
-                              Site='',  # Enter the site name if you wish. Only used for report generation.
-                              PlotID='',  # Enter the plot name/ID if you wish. Only used for report generation.
-                              UTM_zone_number=56,  # Optional: Set this or the Lat Lon outputs will be incorrect.
-                              UTM_zone_letter='',  # Optional: Used for the plot report.
-                              UTM_is_north=False,  # If in the northern hemisphere, set this to True.
+                          UTM_zone_number=56,  # Optional: Set this or the Lat Lon outputs will be incorrect.
+                          UTM_zone_letter='',  # Optional: Used for the plot report.
+                          UTM_is_north=False,  # If in the northern hemisphere, set this to True.
 
-                              # Set these appropriately for your hardware.
-                              batch_size=18,  # If you get CUDA errors, try lowering this. This is suitable for 24 GB of vRAM.
-                              num_procs=10,  # Number of CPU cores you want to use. If you run out of RAM, lower this.
+                          # Set these appropriately for your hardware.
+                          batch_size=18,  # If you get CUDA errors, try lowering this. This is suitable for 24 GB of vRAM.
+                          num_procs=10,  # Number of CPU cores you want to use. If you run out of RAM, lower this.
 
-                              # Optional settings - Generally leave as they are.
-                              sort_stems=1,  # If you don't need the sorted stem points, turning this off speeds things up.
-                                             # Veg sorting is required for tree height measurement, but stem sorting isn't necessary for general use.
+                          # Optional settings - Generally leave as they are.
+                          sort_stems=1,  # If you don't need the sorted stem points, turning this off speeds things up.
+                                         # Veg sorting is required for tree height measurement, but stem sorting isn't necessary for general use.
 
-                              tree_base_cutoff_height=5,  # A tree must have a cylinder measurement below this height above DTM to be kept. This filters unsorted branches from being called individual trees.
-                              generate_output_point_cloud=1,  # Turn on if you would like a semantic and instance segmented point cloud. This mode will override the "sort_stems" setting if on.
-                                                              # If you activate "tree aware plot cropping mode", this function will use it.
-                              ground_veg_cutoff_height=3,  # Any vegetation points below this height are considered to be understory and are not assigned to individual trees.
-                              veg_sorting_range=5,  # Vegetation points can be, at most, this far away from a cylinder horizontally to be matched to a particular tree.
-                              stem_sorting_range=1,  # Stem points can be, at most, this far away from a cylinder in 3D to be matched to a particular tree.
-                              low_resolution_point_cloud_hack_mode=4,  # See README.md for details. Very ugly hack that can sometimes be us-eful on low resolution point clouds.
-                              maximum_stem_diameter=3,  # Any diameters greater than this will be deemed erroneous and deleted.
-                              delete_working_directory=True,  # Generally leave this on. Deletes the files used for segmentation after segmentation is finished.
-                                                              # You may wish to turn it off if you want to re-run/modify the segmentation code so you don't need to run pre-processing every time.
-                              minimise_output_size_mode=0  # Will delete a number of non-essential outputs to reduce storage use.
-                              )
+                          tree_base_cutoff_height=5,  # A tree must have a cylinder measurement below this height above DTM to be kept. This filters unsorted branches from being called individual trees.
+                          generate_output_point_cloud=1,  # Turn on if you would like a semantic and instance segmented point cloud. This mode will override the "sort_stems" setting if on.
+                                                          # If you activate "tree aware plot cropping mode", this function will use it.
+                          ground_veg_cutoff_height=3,  # Any vegetation points below this height are considered to be understory and are not assigned to individual trees.
+                          veg_sorting_range=5,  # Vegetation points can be, at most, this far away from a cylinder horizontally to be matched to a particular tree.
+                          stem_sorting_range=1,  # Stem points can be, at most, this far away from a cylinder in 3D to be matched to a particular tree.
+                          low_resolution_point_cloud_hack_mode=0,  # See README.md for details. Very ugly hack that can sometimes be us-eful on low resolution point clouds.
+                          maximum_stem_diameter=3,  # Any diameters greater than this will be deemed erroneous and deleted.
+                          delete_working_directory=True,  # Generally leave this on. Deletes the files used for segmentation after segmentation is finished.
+                                                          # You may wish to turn it off if you want to re-run/modify the segmentation code so you don't need to run pre-processing every time.
+                          minimise_output_size_mode=0  # Will delete a number of non-essential outputs to reduce storage use.
+                          )
 
-            parameters.update(other_parameters)
-            FSCT(parameters=parameters,
-                 # Set below to 0 or 1 (or True/False). Each step requires the previous step to have been run already.
-                 # For standard use, just leave them all set to 1.
-                 preprocess=1,
-                 segmentation=1,
-                 postprocessing=1,
-                 measure_plot=1,
-                 make_report=1,
-                 clean_up_files=1)
-        except:
-            pass
+        parameters.update(other_parameters)
+        FSCT(parameters=parameters,
+             # Set below to 0 or 1 (or True/False). Each step requires the previous step to have been run already.
+             # For standard use, just leave them all set to 1.
+             preprocess=1,
+             segmentation=1,
+             postprocessing=1,
+             measure_plot=1,
+             make_report=0,
+             clean_up_files=0)
+        # except:
+        #     pass

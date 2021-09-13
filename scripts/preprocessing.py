@@ -42,7 +42,7 @@ class Preprocessing:
             maxes = np.max(self.point_cloud[:, :2], axis=0)
             self.parameters['plot_centre'] = (mins + maxes) / 2
 
-        np.savetxt(self.output_dir + 'plot_centre_coords.csv', self.parameters['plot_centre'])
+        # np.savetxt(self.output_dir + 'plot_centre_coords.csv', self.parameters['plot_centre'])
 
         if self.parameters['subsample']:
             self.point_cloud = subsample_point_cloud(self.point_cloud,
@@ -51,7 +51,7 @@ class Preprocessing:
 
         self.num_points_subsampled = self.point_cloud.shape[0]
 
-        save_file(self.output_dir + self.filename[:-4] + '_' + 'working_point_cloud.las',
+        save_file(self.output_dir + 'working_point_cloud.las',
                   self.point_cloud, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
 
         self.point_cloud = self.point_cloud[:, :3]  # Trims off unneeded dimensions if present.
@@ -167,8 +167,7 @@ class Preprocessing:
         self.preprocessing_time_end = time.time()
         self.preprocessing_time_total = self.preprocessing_time_end - self.preprocessing_time_start
         print("Preprocessing took", self.preprocessing_time_total, 's')
-        processing_report_headers = ['Site',
-                                     'PlotID',
+        processing_report_headers = ['PlotId',
                                      'Point Cloud Filename',
                                      'Plot Centre Northing',
                                      'Plot Centre Easting',
@@ -187,10 +186,19 @@ class Preprocessing:
                                      'Median Height',
                                      'Min Height',
                                      'Max Height',
-                                     'Mean Volume',
-                                     'Median Volume',
-                                     'Min Volume',
-                                     'Max Volume',
+
+                                     'Mean Volume 1',
+                                     'Median Volume 1',
+                                     'Min Volume 1',
+                                     'Max Volume 1',
+                                     'Total Volume 1'
+                                     
+                                     'Mean Volume 2',
+                                     'Median Volume 2',
+                                     'Min Volume 2',
+                                     'Max Volume 2',
+                                     'Total Volume 2'
+                                     
                                      'Avg Gradient',
                                      'Avg Gradient North',
                                      'Avg Gradient East',
@@ -207,13 +215,13 @@ class Preprocessing:
                                      'Preprocessing Time (s)',
                                      'Semantic Segmentation Time (s)',
                                      'Post processing time (s)',
-                                     'Measurement Time (s)']
+                                     'Measurement Time (s)',
+                                     'Total Run Time (s)']
 
         processing_report = pd.DataFrame(np.zeros((1, len(processing_report_headers))), columns=processing_report_headers)
 
         processing_report['Preprocessing Time (s)'] = self.preprocessing_time_total
-        processing_report['Site'] = self.parameters['Site']
-        processing_report['PlotID'] = self.parameters['PlotID']
+        processing_report['PlotId'] = self.filename[:-4]
         processing_report['Point Cloud Filename'] = self.parameters['point_cloud_filename']
         processing_report['Plot Centre Northing'] = self.parameters['plot_centre'][0]
         processing_report['Plot Centre Easting'] = self.parameters['plot_centre'][1]

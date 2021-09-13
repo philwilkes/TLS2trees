@@ -73,7 +73,7 @@ class SemanticSegmentation:
         self.output_dir = self.directory + self.filename[:-4] + '_FSCT_output/'
         self.working_dir = self.directory + self.filename[:-4] + '_FSCT_output/working_directory/'
 
-        self.filename = self.filename[:-4] + '_working_point_cloud.las'
+        self.filename = 'working_point_cloud.las'
         self.directory = self.output_dir
 
     def inference(self):

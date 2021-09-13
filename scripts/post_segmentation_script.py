@@ -46,6 +46,7 @@ class PostProcessing:
         self.headers_of_interest.append('height_above_DTM')  # Add height_above_DTM to the headers.
         self.label_index = self.headers_of_interest.index('label')
         self.point_cloud[:, self.label_index] = self.point_cloud[:, self.label_index] + 1  # index offset since noise_class was removed from inference.
+        self.processing_report = pd.read_csv(self.output_dir + 'processing_report.csv', index_col=None)
 
     def make_DTM(self, crop_dtm=False):
         print("Making DTM...")
@@ -80,7 +81,7 @@ class PostProcessing:
                     grid_points = np.vstack((grid_points, np.array([[x, y, z]])))
 
         if self.parameters['plot_radius'] > 0:
-            plot_centre = np.loadtxt(self.output_dir + 'plot_centre_coords.csv')
+            plot_centre = [[float(self.processing_report['Plot Centre Northing']), float(self.processing_report['Plot Centre Easting'])]]
             crop_radius = self.parameters['plot_radius'] + self.parameters['plot_radius_buffer']
             grid_points = grid_points[np.linalg.norm(grid_points[:, :2] - plot_centre, axis=1) <= crop_radius]
 
@@ -95,6 +96,7 @@ class PostProcessing:
         self.terrain_points = self.point_cloud[self.point_cloud[:, self.label_index] == self.terrain_class_label]  # -2 is now the class label as we added the height above DTM column.
         self.DTM = self.make_DTM(crop_dtm=True)
         save_file(self.output_dir + 'DTM.las', self.DTM)
+
         # self.DTM, _ = load_file(self.output_dir + 'DTM.las')
 
         if self.parameters['plot_radius'] is not None or self.parameters['plot_radius'] != 0:
@@ -137,15 +139,14 @@ class PostProcessing:
         self.cleaned_pc = np.vstack((self.terrain_points, self.vegetation_points, self.cwd_points, self.stem_points))
         save_file(self.output_dir + 'segmented_cleaned.las', self.cleaned_pc, headers_of_interest=self.headers_of_interest)
 
-        processing_report = pd.read_csv(self.output_dir + 'processing_report.csv', index_col=None)
         self.post_processing_time_end = time.time()
         self.post_processing_time = self.post_processing_time_end - self.post_processing_time_start
         print("Post-processing took", self.post_processing_time, 'seconds')
-        processing_report['Post processing time (s)'] = self.post_processing_time
-        processing_report['Num Terrain Points'] = self.terrain_points.shape[0]
-        processing_report['Num Vegetation Points'] = self.vegetation_points.shape[0]
-        processing_report['Num CWD Points'] = self.cwd_points.shape[0]
-        processing_report['Num Stem Points'] = self.stem_points.shape[0]
-        processing_report['Post processing time (s)'] = self.post_processing_time
-        processing_report.to_csv(self.output_dir + 'processing_report.csv', index=False)
+        self.processing_report['Post processing time (s)'] = self.post_processing_time
+        self.processing_report['Num Terrain Points'] = self.terrain_points.shape[0]
+        self.processing_report['Num Vegetation Points'] = self.vegetation_points.shape[0]
+        self.processing_report['Num CWD Points'] = self.cwd_points.shape[0]
+        self.processing_report['Num Stem Points'] = self.stem_points.shape[0]
+        self.processing_report['Post processing time (s)'] = self.post_processing_time
+        self.processing_report.to_csv(self.output_dir + 'processing_report.csv', index=False)
         print("Post processing done.")

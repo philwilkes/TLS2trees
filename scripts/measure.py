@@ -67,11 +67,11 @@ class MeasureTree:
 
         self.veg_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, label=6, height_above_dtm=7, tree_id=8)
         self.stem_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, label=6, height_above_dtm=7, tree_id=8)
-        self.tree_data_dict = dict(PlotId=0, TreeId=1, x_tree_base=2, y_tree_base=3, z_tree_base=4, DBH=5,
-                                   Height=6,
+        self.tree_data_dict = dict(PlotId=0, TreeId=1, x_tree_base=2, y_tree_base=3, z_tree_base=4, DBH=5, Height=6,
                                    Volume_1=7, Volume_2=8, Crown_mean_x=9, Crown_mean_y=10, Crown_top_x=11, Crown_top_y=12,
                                    Crown_top_z=13,
                                    mean_understory_height_in_5m_radius=14)
+
         self.terrain_points, headers_of_interest = load_file(self.output_dir + 'terrain_points.las',
                                                              headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue',
                                                                                   'label', 'height_above_DTM'])
@@ -970,7 +970,7 @@ class MeasureTree:
                             mean_understory_height_in_5m_radius) + ' m'
 
                     print(description)
-                    this_trees_data = np.zeros((1, tree_data.shape[1]), dtype='object')
+                    this_trees_data = np.zeros((1, 15), dtype='object')
                     this_trees_data[:, self.tree_data_dict['PlotId']] = self.processing_report['PlotId']
                     this_trees_data[:, self.tree_data_dict['TreeId']] = int(tree_id)
                     this_trees_data[:, self.tree_data_dict['x_tree_base']] = x_tree_base

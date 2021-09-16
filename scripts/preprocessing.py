@@ -191,13 +191,13 @@ class Preprocessing:
                                      'Median Volume 1',
                                      'Min Volume 1',
                                      'Max Volume 1',
-                                     'Total Volume 1'
+                                     'Total Volume 1',
                                      
                                      'Mean Volume 2',
                                      'Median Volume 2',
                                      'Min Volume 2',
                                      'Max Volume 2',
-                                     'Total Volume 2'
+                                     'Total Volume 2',
                                      
                                      'Avg Gradient',
                                      'Avg Gradient North',

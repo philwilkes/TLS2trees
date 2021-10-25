@@ -94,8 +94,6 @@ def subsample_point_cloud(pointcloud, min_spacing, num_procs=1):
 
 
 def load_file(filename, plot_centre=None, plot_radius=0, plot_radius_buffer=0, silent=False, headers_of_interest=None, return_num_points=False):
-    output_dir = os.path.dirname(os.path.realpath(filename)).replace('\\', '/') + '/' + filename.split('/')[-1][:-4] + '_FSCT_output/'
-
     if headers_of_interest is None:
         headers_of_interest = []
     if not silent:

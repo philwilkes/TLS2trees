@@ -12,13 +12,9 @@ the segmentation tool is capable of handling at this time. If a dataset is too l
 will likely label the stems as vegetation points instead.
 
 There are also some instances where the segmentation model has not seen appropriate training data for the point cloud.
-This will be improved in future versions, as it should be easily fixed with additional training data.
+This may be improved in future versions, as it should be easily fixed with additional training data.
 
-This usage of this tool is intended to be accessable to as many people as possible. With that goal in mind, I hope to 
-one day turn this into a simple executable program to avoid the need for Python skills. If you know how to do this and 
-would like to help make it happen, please get in touch!
-
-https://www.youtube.com/watch?v=4kBeU3Wcz9k
+#TODO https://www.youtube.com/watch?v=4kBeU3Wcz9k
 
 ## Installation
 
@@ -44,7 +40,7 @@ finds no trees in the point cloud.
 
 **Plot_Report.html and Plot_Report.md**
 A summary of the information extracted. Nicer to look at than the processing report, but still a bit ugly in Version 1.
-Future versions will make this a bit nicer/add data tables/etc.
+Future versions may make this a bit nicer/add data tables/etc.
 
 **tree_data.csv**
 Basic measurements of the trees.
@@ -204,7 +200,7 @@ Stem points can be, at most, this far away from a cylinder in 3D to be matched t
 
 #### low_resolution_point_cloud_hack_mode
 This model was trained on relatively high resolution point clouds, so if a stem is of sufficiently low resolution,
-it will likely be classified as vegetation instead. Eventually, I will train this model on a larger training dataset
+it will likely be classified as vegetation instead. Eventually, I may train this model on a larger training dataset
 with more examples of sparse point clouds, however, in the meantime, I came up with an ugly hack that
 sometimes helps a little when working with low resolution datasets (which this tool was not really designed for).
 
@@ -259,7 +255,7 @@ Completely horizontal branches/sections may not be measured correctly from the m
 Additional training of the segmentation model to deal with younger trees and slightly lower resolution point clouds.
 
 Deep learning based cylinder fitting solution to handle greater diversity and complexity.
-A tiling mode will be developed to allow the automated input of larger point clouds and it will include the use of 
+A tiling mode may be developed to allow the automated input of larger point clouds and it would include the use of 
 the tree-aware-plot-cropping concept.
 
 ## Citation

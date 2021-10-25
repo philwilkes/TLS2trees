@@ -21,10 +21,11 @@ class ReportWriter:
         self.parameters = parameters
         self.filename = self.parameters['point_cloud_filename'].replace('\\', '/')
         self.output_dir = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/' + \
-            self.filename.split('/')[-1][:-4] + '_FSCT_output/'
+                          self.filename.split('/')[-1][:-4] + '_FSCT_output/'
         self.filename = self.filename.split('/')[-1]
-        self.processing_report = pd.read_csv(self.output_dir+'processing_report.csv', index_col=False)
-        self.parameters['plot_centre'] = [float(self.processing_report['Plot Centre Northing']), float(self.processing_report['Plot Centre Easting'])]
+        self.processing_report = pd.read_csv(self.output_dir + 'processing_report.csv', index_col=False)
+        self.parameters['plot_centre'] = [float(self.processing_report['Plot Centre Northing']),
+                                          float(self.processing_report['Plot Centre Easting'])]
         self.plot_area = float(self.processing_report['Plot Area'])
         self.stems_per_ha = int(self.processing_report['Stems/ha'])
         self.parameters['plot_radius'] = float(self.processing_report['Plot Radius'])
@@ -59,17 +60,12 @@ class ReportWriter:
                            'segmented.las',
                            'ground_veg.las',
                            'Plot_Report.md',
-                           self.filename[:-4] + '_working_point_cloud.las']
-
-        files_to_delete = ['terrain_points.las',
-                           'vegetation_points.las',
-                           'cwd_points.las',
-                           'stem_points.las',
-                           'segmented.las',
-                           'ground_veg.las',
-                           'Plot_Report.md',
-                           'plot_centre_coords.csv',
-                           self.filename[:-4] + '_working_point_cloud.las']
+                           'working_point_cloud.las',
+                           'tree_aware_cropped_point_cloud.las',
+                           'segmented_cleaned.las',
+                           'veg_points_sorted.las',
+                           'stem_points_sorted.las',
+                           ]
 
         for file in files_to_delete:
             try:
@@ -80,7 +76,7 @@ class ReportWriter:
                 print(self.output_dir + file, ' not found.')
 
         if self.parameters['delete_working_directory']:
-            shutil.rmtree(self.output_dir+'working_directory/', ignore_errors=True)
+            shutil.rmtree(self.output_dir + 'working_directory/', ignore_errors=True)
 
     def create_report(self):
         filename = self.output_dir + 'Plot_Report'
@@ -99,7 +95,8 @@ class ReportWriter:
                                   self.parameters['UTM_zone_number']) + ' ' + str(
                                   self.parameters['UTM_zone_letter']) + ', Hemisphere: ' + hemisphere)
         mdFile.new_header(level=level,
-                          title='Plot Centre (Lat Lon): ' + str(np.around(self.plot_centre_lat, 5)) + ', ' + str(np.around(self.plot_centre_lon, 5)))
+                          title='Plot Centre (Lat Lon): ' + str(np.around(self.plot_centre_lat, 5)) + ', ' + str(
+                              np.around(self.plot_centre_lon, 5)))
 
         mdFile.new_header(level=level, title='Plot Radius: ' + str(
                 self.parameters['plot_radius']) + ' m, ' + ' Plot Radius Buffer: ' + str(
@@ -112,8 +109,10 @@ class ReportWriter:
             mdFile.new_header(level=level, title='Min DBH: ' + str(np.around(np.min(self.DBH), 3)) + ' m')
             mdFile.new_header(level=level, title='Max DBH: ' + str(np.around(np.max(self.DBH), 3)) + ' m')
 
-            mdFile.new_header(level=level, title='Total Plot Stem Volume 1: ' + str(np.around(np.sum(self.Volume_1), 3)) + ' m3')
-            mdFile.new_header(level=level, title='Total Plot Stem Volume 2: ' + str(np.around(np.sum(self.Volume_2), 3)) + ' m3')
+            mdFile.new_header(level=level,
+                              title='Total Plot Stem Volume 1: ' + str(np.around(np.sum(self.Volume_1), 3)) + ' m3')
+            mdFile.new_header(level=level,
+                              title='Total Plot Stem Volume 2: ' + str(np.around(np.sum(self.Volume_2), 3)) + ' m3')
 
         else:
             mdFile.new_header(level=level, title='Stems/ha: 0')
@@ -124,19 +123,20 @@ class ReportWriter:
         mdFile.new_header(level=level,
                           title='FSCT Processing Time: ' + str(np.around(total_processing_time / 60., 1)) + ' minutes')
         # TODO Replace absolute paths with relative paths in Plot_report.html as links break when folders are moved but relative links would work.
-        path = self.output_dir + "Stem_Map.png"
+        # path = self.output_dir + "Stem_Map.png"
+        path = "Stem_Map.png"
         mdFile.new_paragraph(Html.image(path=path, size='1000'))
 
-        path = self.output_dir + "Diameter at Breast Height Distribution.png"
+        path = "Diameter at Breast Height Distribution.png"
         mdFile.new_paragraph(Html.image(path=path, size='1000'))
 
-        path = self.output_dir + "Tree Height Distribution.png"
+        path = "Tree Height Distribution.png"
         mdFile.new_paragraph(Html.image(path=path, size='1000'))
 
-        path = self.output_dir + "Tree Volume 1 Distribution.png"
+        path = "Tree Volume 1 Distribution.png"
         mdFile.new_paragraph(Html.image(path=path, size='1000'))
 
-        path = self.output_dir + "Tree Volume 2 Distribution.png"
+        path = "Tree Volume 2 Distribution.png"
         mdFile.new_paragraph(Html.image(path=path, size='1000'))
 
         mdFile.create_md_file()
@@ -365,4 +365,3 @@ class ReportWriter:
             fig4.show(False)
         fig4.savefig(self.output_dir + 'Tree Volume 2 Distribution.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
         plt.close()
-

@@ -20,14 +20,13 @@ if __name__ == '__main__':
     point_clouds_to_process = file_mode()
 
     for point_cloud_filename in point_clouds_to_process:
-        # try:
         parameters = dict(point_cloud_filename=point_cloud_filename,
                           # Adjust if needed
                           plot_centre=None,  # [X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the median XY coords of the point cloud.
 
                           # Circular Plot options - Leave at 0 if not using.
                           plot_radius=20,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
-                          plot_radius_buffer=2,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
+                          plot_radius_buffer=3,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
 
                           # Rectangular/Tiled Plot options - Leave at 0 if not using.
                           square_grid_slicing_size=0,  # NOT YET IMPLEMENTED
@@ -68,5 +67,3 @@ if __name__ == '__main__':
              measure_plot=1,
              make_report=0,
              clean_up_files=0)
-        # except:
-        #     pass

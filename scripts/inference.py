@@ -75,6 +75,8 @@ class SemanticSegmentation:
 
         self.filename = 'working_point_cloud.las'
         self.directory = self.output_dir
+        self.processing_report = pd.read_csv(self.output_dir + 'processing_report.csv', index_col=None)
+        self.plot_centre = [[float(self.processing_report['Plot Centre Northing']), float(self.processing_report['Plot Centre Easting'])]]
 
     def inference(self):
         test_dataset = TestingDataset(root_dir=self.working_dir,
@@ -83,8 +85,6 @@ class SemanticSegmentation:
 
         test_loader = DataLoader(test_dataset, batch_size=self.parameters['batch_size'], shuffle=False,
                                  num_workers=0)
-
-        global_shift = np.loadtxt(self.working_dir + 'global_shift.csv', dtype='float64')
 
         model = Net(num_classes=4).to(self.device)
         model.load_state_dict(torch.load('../model/' + self.parameters['model_filename']), strict=False)
@@ -112,17 +112,16 @@ class SemanticSegmentation:
             print('\r' + str(num_boxes)+'/'+str(num_boxes))
         del outputb, out, batches, pos, output  # clean up anything no longer needed to free RAM.
         original_point_cloud, headers = load_file(self.directory + self.filename, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue'])
-        original_point_cloud[:, :3] = original_point_cloud[:, :3] - global_shift
+        original_point_cloud[:, :2] = original_point_cloud[:, :2] - self.plot_centre
         self.output = choose_most_confident_label(self.output_point_cloud, original_point_cloud)
         self.output = np.asarray(self.output, dtype='float64')
-        self.output[:, :3] = self.output[:, :3] + global_shift
+        self.output[:, :2] = self.output[:, :2] + self.plot_centre
         save_file(self.output_dir + 'segmented.las', self.output, headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue', 'label'])
 
         self.sem_seg_end_time = time.time()
         self.sem_seg_total_time = self.sem_seg_end_time - self.sem_seg_start_time
-        processing_report = pd.read_csv(self.output_dir + 'processing_report.csv', index_col=None)
-        processing_report['Semantic Segmentation Time (s)'] = self.sem_seg_total_time
-        processing_report.to_csv(self.output_dir + 'processing_report.csv', index=False)
+        self.processing_report['Semantic Segmentation Time (s)'] = self.sem_seg_total_time
+        self.processing_report.to_csv(self.output_dir + 'processing_report.csv', index=False)
         print("Semantic segmentation took", self.sem_seg_total_time, 's')
         print("Semantic segmentation done")
         if self.parameters['delete_working_directory']:

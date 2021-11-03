@@ -18,11 +18,13 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.linear_model import RANSACRegressor
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import make_pipeline
-from tools import load_file, save_file, low_resolution_hack_mode, subsample_point_cloud, clustering, cluster_hdbscan, cluster_dbscan, get_heights_above_DTM
+from tools import load_file, save_file, low_resolution_hack_mode, subsample_point_cloud, clustering, cluster_hdbscan, cluster_dbscan, get_heights_above_DTM, subsample
 import time
 import hdbscan
 from skspatial.objects import Plane
 import warnings
+import scipy
+from sklearn.neighbors import BallTree
 
 
 class MeasureTree:
@@ -63,7 +65,7 @@ class MeasureTree:
             self.character_viz.append(np.genfromtxt('../tools/numbers/' + i + '.csv', delimiter=','))
 
         self.cyl_dict = dict(x=0, y=1, z=2, nx=3, ny=4, nz=5, radius=6, CCI=7, branch_id=8, parent_branch_id=9,
-                             tree_id=10, segment_volume=11, segment_angle_to_horiz=12, height_above_dtm=13)
+                             tree_id=10, tree_volume=11, segment_angle_to_horiz=12, height_above_dtm=13)
 
         self.veg_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, label=6, height_above_dtm=7, tree_id=8)
         self.stem_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, label=6, height_above_dtm=7, tree_id=8)
@@ -89,8 +91,18 @@ class MeasureTree:
         self.ground_veg = self.vegetation_points[ground_veg_mask]
         save_file(self.output_dir + 'ground_veg.las', self.ground_veg, headers_of_interest=list(self.veg_dict))
         self.vegetation_points = self.vegetation_points[np.logical_not(ground_veg_mask)]
-        print("Measuring canopy gap fraction...")
         veg_kdtree = spatial.cKDTree(self.vegetation_points[:, :2], leafsize=10000)
+
+        try:
+            self.cwd_points, headers_of_interest = load_file(self.output_dir + 'cwd_points.las',
+                                                             headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue',
+                                                                                  'label', 'height_above_DTM'])
+            self.cwd_points = np.hstack((self.cwd_points, np.zeros((self.cwd_points.shape[0], 1))))
+        except FileNotFoundError:
+            self.cwd_points = np.zeros((0, self.vegetation_points.shape[1]))
+
+        cwd_kdtree = spatial.cKDTree(self.cwd_points[:, :2], leafsize=10000)
+
         self.ground_veg_kdtree = spatial.cKDTree(self.ground_veg[:, :2], leafsize=10000)
         xmin = np.floor(np.min(self.terrain_points[:, 0]))
         ymin = np.floor(np.min(self.terrain_points[:, 1]))
@@ -105,6 +117,7 @@ class MeasureTree:
         self.ground_area = 0
         self.canopy_area = 0
         self.ground_veg_area = 0
+        self.cwd_area = 0
         for x in x_points:
             for y in y_points:
                 if self.inside_conv_hull(np.array([x, y]), convexhull):
@@ -112,7 +125,8 @@ class MeasureTree:
                                                           r=self.parameters['Vegetation_coverage_resolution'], p=10)
                     ground_veg_indices = self.ground_veg_kdtree.query_ball_point([x, y], r=self.parameters[
                         'Vegetation_coverage_resolution'], p=10)
-
+                    cwd_indices = cwd_kdtree.query_ball_point([x, y], r=self.parameters[
+                        'Vegetation_coverage_resolution'], p=10)
                     self.ground_area += 1
                     if len(indices) > 5:
                         self.canopy_area += 1
@@ -120,15 +134,14 @@ class MeasureTree:
                     if len(ground_veg_indices) > 5:
                         self.ground_veg_area += 1
 
-        print(self.canopy_area, self.ground_area, "Canopy Gap Fraction:", self.canopy_area / self.ground_area)
+                    if len(cwd_indices) > 5:
+                        self.cwd_area += 1
 
-        try:
-            self.cwd_points, headers_of_interest = load_file(self.output_dir + 'cwd_points.las',
-                                                             headers_of_interest=['x', 'y', 'z', 'red', 'green', 'blue',
-                                                                                  'label', 'height_above_DTM'])
-            self.cwd_points = np.hstack((self.cwd_points, np.zeros((self.cwd_points.shape[0], 1))))
-        except FileNotFoundError:
-            self.cwd_points = np.zeros((0, self.vegetation_points.shape[1]))
+        print("Canopy Gap Fraction:", self.canopy_area / self.ground_area)
+        print("Understory Veg Fraction:", self.ground_veg_area / self.ground_area)
+        print("Coarse Woody Debris Fraction:", self.cwd_area / self.ground_area)
+
+
 
         self.text_point_cloud = np.zeros((0, 3))
         self.tree_measurements = np.zeros((0, 8))
@@ -159,25 +172,11 @@ class MeasureTree:
                 interpolated[:, self.cyl_dict['tree_id']] = cyl1[self.cyl_dict['tree_id']]
                 interpolated[:, self.cyl_dict['branch_id']] = cyl1[self.cyl_dict['branch_id']]
                 interpolated[:, self.cyl_dict['parent_branch_id']] = cyl2[self.cyl_dict['branch_id']]
-
-                interpolated[:, self.cyl_dict['segment_volume']] += (np.pi * np.mean(
-                        interpolated[:, self.cyl_dict['radius']]) ** 2) * length  # volume
-
                 interpolated[:, self.cyl_dict['radius']] = np.min(
                         [cyl1[self.cyl_dict['radius']], cyl2[self.cyl_dict['radius']]])
 
         return interpolated
 
-    def fix_outliers(self, tree_cylinders):
-        radius_threshold = np.nanpercentile(tree_cylinders[:, self.cyl_dict['radius']], 70)
-        doubtful_cyl_mask = np.logical_or(tree_cylinders[:, self.cyl_dict['radius']] >= radius_threshold,
-                                          tree_cylinders[:, self.cyl_dict['radius']] >= self.parameters['maximum_stem_diameter'])
-        if tree_cylinders[np.logical_not(doubtful_cyl_mask)].shape[0] > 1:
-            neigh = NearestNeighbors(n_neighbors=2)
-            neigh.fit(tree_cylinders[np.logical_not(doubtful_cyl_mask), :3])
-            neighbour_list = neigh.kneighbors(tree_cylinders[doubtful_cyl_mask, :3], return_distance=False)
-            tree_cylinders[doubtful_cyl_mask, self.cyl_dict['radius']] = [np.median(tree_cylinders[np.logical_not(doubtful_cyl_mask), self.cyl_dict['radius']][indices]) for indices in neighbour_list]
-        return tree_cylinders
 
     @classmethod
     def compute_angle(cls, normal1, normal2):
@@ -360,19 +359,19 @@ class MeasureTree:
         if P_xy.shape[0] >= 20:
 
             model_robust, inliers = ransac(P_xy[:, :2], CircleModel, min_samples=int(P_xy.shape[0] * 0.3),
-                                           residual_threshold=0.3, max_trials=2500)
+                                           residual_threshold=0.05, max_trials=5000)
             xc, yc = model_robust.params[0:2]
             r = model_robust.params[2]
             CCI = MeasureTree.circumferential_completeness_index([xc, yc], r, P_xy[:, :2])
 
-        elif P_xy.shape[0] >= 10 and P_xy.shape[0] < 20:
-            model_robust, inliers = ransac(P_xy[:, :2], CircleModel, min_samples=7,
-                                           residual_threshold=0.3, max_trials=2500)
-            xc, yc = model_robust.params[0:2]
-            r = model_robust.params[2]
-            CCI = MeasureTree.circumferential_completeness_index([xc, yc], r, P_xy[:, :2])
+        # elif P_xy.shape[0] >= 10 and P_xy.shape[0] < 20:
+        #     model_robust, inliers = ransac(P_xy[:, :2], CircleModel, min_samples=10,
+        #                                    residual_threshold=0.05, max_trials=2500)
+        #     xc, yc = model_robust.params[0:2]
+        #     r = model_robust.params[2]
+        #     CCI = MeasureTree.circumferential_completeness_index([xc, yc], r, P_xy[:, :2])
 
-        if CCI < 0.3:
+        if CCI < 0.4:
             r = 0
             xc, yc = np.mean(P_xy[:, :2], axis=0)
             CCI = 0
@@ -488,6 +487,11 @@ class MeasureTree:
 
     @classmethod
     def cylinder_cleaning_multithreaded(cls, args):
+        def compute_frustum_volume(diameter_1, diameter_2, height):
+            radius_1 = 0.5 * diameter_1
+            radius_2 = 0.5 * diameter_2
+            volume = (1 / 3) * np.pi * height * (radius_1 ** 2 + radius_1 + radius_2 ** 2 + radius_2)
+            return volume
         """
         Cylinder Cleaning
         Works on a single tree worth of cylinders at a time.
@@ -504,29 +508,56 @@ class MeasureTree:
         sorted_cylinders, cleaned_measurement_radius, cyl_dict = args
         cleaned_cyls = np.zeros((0, np.shape(sorted_cylinders)[1]))
 
+        tree = BallTree(sorted_cylinders[:, :3])
+        _, ind = tree.query(sorted_cylinders[:, :3], k=10)
+        # print(np.max(ind, axis=1).shape)
+        radii = np.array([np.median(sorted_cylinders[row, cyl_dict['radius']]) for row in ind])
+        sorted_cylinders[:, cyl_dict['radius']] = radii
+
+        # sorted_cylinders
+        # sorted_cylinders = np.around(sorted_cylinders, 3)
+
         while sorted_cylinders.shape[0] > 2:
             start_point_idx = np.argmin(sorted_cylinders[:, 2])
-            start_point = sorted_cylinders[start_point_idx, :]
+            start_point = sorted_cylinders[start_point_idx]
             sorted_cylinders = np.delete(sorted_cylinders, start_point_idx, axis=0)
-
             kdtree = spatial.cKDTree(sorted_cylinders[:, :3])
             results = kdtree.query_ball_point(start_point[:3], cleaned_measurement_radius)
             neighbours = sorted_cylinders[results]
+            neighbours = np.vstack((neighbours, start_point))
             best_cylinder = start_point
+            # print(neighbours.shape)
+            # if neighbours.shape[0]>0:
+                # best_cylinder[cyl_dict['radius']] = neighbours[peaks[-1], cyl_dict['radius']]
+                # best_cylinder[3:6] = np.median(neighbours[:, 3:6], axis=0)
+                # cleaned_cyls = np.vstack((cleaned_cyls, best_cylinder))
+            #             # print(np.mean(neighbours[:, cyl_dict['radius']]))
             if neighbours.shape[0] > 0:
                 if np.max(neighbours[:, cyl_dict['CCI']]) > 0:
                     best_cylinder = neighbours[np.argsort(neighbours[:, cyl_dict['CCI']])][-1]  # choose cyl with highest CCI.
-
                 # compute 50th percentile of CCI in neighbourhood
                 percentile_thresh = np.percentile(neighbours[:, cyl_dict['CCI']], 50)
                 if neighbours[neighbours[:, cyl_dict['CCI']] >= percentile_thresh, :2].shape[0] > 0:
                     best_cylinder[:3] = np.median(neighbours[neighbours[:, cyl_dict['CCI']] >= percentile_thresh, :3], axis=0)
                     best_cylinder[3:6] = np.median(neighbours[neighbours[:, cyl_dict['CCI']] >= percentile_thresh, 3:6], axis=0)
-                    best_cylinder[cyl_dict['radius']] = np.median(neighbours[neighbours[:, cyl_dict['CCI']] >= percentile_thresh, cyl_dict['radius']], axis=0)
-
+                    best_cylinder[cyl_dict['radius']] = np.max(neighbours[neighbours[:, cyl_dict['CCI']] >= percentile_thresh, cyl_dict['radius']], axis=0)
             cleaned_cyls = np.vstack((cleaned_cyls, best_cylinder))
             sorted_cylinders = np.delete(sorted_cylinders, results, axis=0)
-
+        volume_cyls = deepcopy(cleaned_cyls)
+        volume = 0
+        while volume_cyls.shape[0] > 2:
+            lowest_point_idx = np.argmin(volume_cyls[:, 2])
+            lowest_point = volume_cyls[lowest_point_idx]
+            volume_cyls = np.delete(volume_cyls, lowest_point_idx, axis=0)
+            tree = BallTree(volume_cyls[:, :3], leaf_size=2)
+            _, neighbour_idx = tree.query(np.atleast_2d(lowest_point[:3]), 1)
+            neighbour_idx = int(neighbour_idx)
+            neighbour = volume_cyls[neighbour_idx]
+            distance = np.linalg.norm(neighbour[:3] - lowest_point[:3])
+            # print(neighbour, lowest_point)
+            volume += compute_frustum_volume(lowest_point[cyl_dict['radius']], neighbour[cyl_dict['radius']], distance)
+        # print(volume, cleaned_cyls.shape)
+        cleaned_cyls[:, cyl_dict['tree_volume']] = volume
         return cleaned_cyls
 
     @staticmethod
@@ -547,7 +578,7 @@ class MeasureTree:
         Returns:
             CCI
         """
-        sector_angle = 9  # degrees
+        sector_angle = 4.5  # degrees
         num_sections = int(np.ceil(360 / sector_angle))
         sectors = np.linspace(-180, 180, num=num_sections, endpoint=False)
 
@@ -555,8 +586,8 @@ class MeasureTree:
         norms = np.linalg.norm(centre_vectors, axis=1)
 
         centre_vectors = centre_vectors / np.atleast_2d(norms).T
-        centre_vectors = centre_vectors[np.logical_and(norms >= 0.7 * estimated_radius,
-                                                       norms <= 1.3 * estimated_radius)]
+        centre_vectors = centre_vectors[np.logical_and(norms >= 0.8 * estimated_radius,
+                                                       norms <= 1.2 * estimated_radius)]
 
         sector_vectors = np.vstack((np.cos(sectors), np.sin(sectors))).T
         CCI = np.sum([np.any(
@@ -639,8 +670,8 @@ class MeasureTree:
         for k in np.unique(skeleton_array[:, -1]):  # Just assigns random colours to the clusters to make it easier to see different neighbouring groups.
             skeleton_cluster_visualisation = np.vstack((skeleton_cluster_visualisation, np.hstack((skeleton_array[skeleton_array[:, -1] == k], np.zeros((skeleton_array[skeleton_array[:, -1] == k].shape[0], 1)) + np.random.randint(0, 10)))))
 
-        # print("Saving skeleton and cluster array...")
-        # save_file(self.output_dir + 'skeleton_cluster_visualisation.las', skeleton_cluster_visualisation, ['X', 'Y', 'Z', 'cluster'])
+        print("Saving skeleton and cluster array...")
+        save_file(self.output_dir + 'skeleton_cluster_visualisation.las', skeleton_cluster_visualisation, ['X', 'Y', 'Z', 'cluster'])
 
         print("Making kdtree...")
         # Assign unassigned skeleton points to the nearest group.
@@ -692,10 +723,27 @@ class MeasureTree:
 
         # cyl_array = [x,y,z,nx,ny,nz,r,CCI,branch_id,tree_id,segment_volume,parent_branch_id]
         print("Saving cylinder array...")
-        # save_file(self.output_dir + 'full_cyl_array.las', full_cyl_array, headers_of_interest=list(self.cyl_dict))
-        # full_cyl_array, _ = load_file(self.output_dir + 'full_cyl_array.las',
-        #                               headers_of_interest=list(self.cyl_dict))
+        save_file(self.output_dir + 'full_cyl_array.las', full_cyl_array, headers_of_interest=list(self.cyl_dict))
+        full_cyl_array, _ = load_file(self.output_dir + 'full_cyl_array.las',
+                                      headers_of_interest=list(self.cyl_dict))
+        if 1:
+            print("Making full_cyl visualisation...")
+            j = 0
+            initial_cyl_vis = []
+            max_j = np.shape(full_cyl_array)[0]
+            with get_context("spawn").Pool(processes=self.num_procs) as pool:
+                for i in pool.imap_unordered(self.make_cyl_visualisation, full_cyl_array):
+                    initial_cyl_vis.append(i)
+                    if j % 100 == 0:
+                        print('\r', j, '/', max_j, end='')
+                    j += 1
+            initial_cyl_vis = np.vstack(initial_cyl_vis)
+            print('\r', max_j, '/', max_j, end='')
+            print('\nDone\n')
 
+            print("\nSaving cylinder visualisation...")
+            save_file(self.output_dir + 'initial_cyl_vis.las', initial_cyl_vis,
+                      headers_of_interest=list(self.cyl_dict))
         print("Sorting Cylinders...")
         full_cyl_array = self.cylinder_sorting(full_cyl_array,
                                                angle_tolerance=self.parameters['sorting_angle_tolerance'],
@@ -759,7 +807,7 @@ class MeasureTree:
                     sorted_full_cyl_array = np.vstack((sorted_full_cyl_array, tree))
                     t_id += 1
 
-        # save_file(self.output_dir + 'sorted_full_cyl_array.las', sorted_full_cyl_array, headers_of_interest=list(self.cyl_dict))
+        save_file(self.output_dir + 'sorted_full_cyl_array.las', sorted_full_cyl_array, headers_of_interest=list(self.cyl_dict))
 
         print("Cylinder interpolation...")
 
@@ -837,8 +885,30 @@ class MeasureTree:
         interpolated_full_cyl_array[:, self.cyl_dict['segment_angle_to_horiz']] = self.compute_angle(v1, v2)
         interpolated_full_cyl_array = get_heights_above_DTM(interpolated_full_cyl_array, self.DTM)
 
-        # save_file(self.output_dir + 'interpolated_full_cyl_array.las', interpolated_full_cyl_array, headers_of_interest=list(self.cyl_dict))
-        # interpolated_full_cyl_array, _ = load_file(self.output_dir + 'interpolated_full_cyl_array.las', headers_of_interest=list(self.cyl_dict))
+
+        save_file(self.output_dir + 'interpolated_full_cyl_array.las', interpolated_full_cyl_array, headers_of_interest=list(self.cyl_dict))
+        interpolated_full_cyl_array, _ = load_file(self.output_dir + 'interpolated_full_cyl_array.las', headers_of_interest=list(self.cyl_dict))
+        print(interpolated_full_cyl_array.shape)
+        if 0:
+            print("Making interp_cyl visualisation...")
+            j = 0
+            interpolated_cyl_vis = []
+            max_j = np.shape(interpolated_full_cyl_array)[0]
+            with get_context("spawn").Pool(processes=self.num_procs) as pool:
+                for i in pool.imap_unordered(self.make_cyl_visualisation, interpolated_full_cyl_array):
+                    interpolated_cyl_vis.append(i)
+                    if j % 100 == 0:
+                        print('\r', j, '/', max_j, end='')
+                    j += 1
+            interpolated_cyl_vis = np.vstack(interpolated_cyl_vis)
+            print('\r', max_j, '/', max_j, end='')
+            print('\nDone\n')
+
+            print("\nSaving cylinder visualisation...")
+            save_file(self.output_dir + 'interpolated_cyl_vis.las', interpolated_cyl_vis,
+                      headers_of_interest=list(self.cyl_dict))
+
+
 
         tree_data = np.zeros((0, 15))
         radial_tree_aware_plot_cropping = False
@@ -869,7 +939,7 @@ class MeasureTree:
                 single_tree = interpolated_full_cyl_array[
                     interpolated_full_cyl_array[:, self.cyl_dict['tree_id']] == tree_id]
                 if single_tree.shape[0] > 0:
-                    single_tree = self.fix_outliers(single_tree)
+                    # single_tree = self.fix_outliers(single_tree)
                     input_data.append([single_tree, self.parameters['cleaned_measurement_radius'], self.cyl_dict])
 
             print('\r', max_tree_id, '/', max_tree_id, end='')
@@ -882,6 +952,7 @@ class MeasureTree:
             cleaned_cyls_list = []
             with get_context("spawn").Pool(processes=self.num_procs) as pool:
                 for i in pool.imap_unordered(MeasureTree.cylinder_cleaning_multithreaded, input_data):
+
                     cleaned_cyls_list.append(i)
                     if j % 11 == 0:
                         print('\r', j, '/', max_j, end='')
@@ -894,6 +965,27 @@ class MeasureTree:
 
             save_file(self.output_dir + 'cleaned_cyls.las', cleaned_cyls,
                       headers_of_interest=list(self.cyl_dict))
+
+            if 0:
+                print("Making cleaned cylinder visualisation DELETE...")
+                j = 0
+                cleaned_cyl_vis = []
+                cleaned_cyl_vis = []
+                max_j = np.shape(cleaned_cyls)[0]
+                with get_context("spawn").Pool(processes=self.num_procs) as pool:
+                    for i in pool.imap_unordered(self.make_cyl_visualisation, cleaned_cyls):
+                        cleaned_cyl_vis.append(i)
+                        if j % 100 == 0:
+                            print('\r', j, '/', max_j, end='')
+                        j += 1
+                cleaned_cyl_vis = np.vstack(cleaned_cyl_vis)
+                print('\r', max_j, '/', max_j, end='')
+                print('\nDone\n')
+
+                print("\nSaving cylinder visualisation...")
+                save_file(self.output_dir + 'cleaned_cyl_vis.las', cleaned_cyl_vis,
+                          headers_of_interest=list(self.cyl_dict))
+
             cleaned_cylinders = np.zeros((0, cleaned_cyls.shape[1]))
 
             print("Sorting vegetation...")
@@ -921,7 +1013,7 @@ class MeasureTree:
                 combined = get_heights_above_DTM(combined, self.DTM)
 
                 # Get highest point of tree. Note, there is usually noise, so we use the 98th percentile.
-                tree_max_point = combined[abs(combined[:, 2] - np.percentile(combined[:, 2], 98, interpolation='nearest')).argmin()]
+                tree_max_point = combined[abs(combined[:, 2] - np.percentile(combined[:, 2], self.parameters['height_percentile'], interpolation='nearest')).argmin()]
 
                 tree_base_point = deepcopy(combined[np.argmin(combined[:, -1])])
                 z_tree_base = tree_base_point[2] - tree_base_point[-1]
@@ -945,9 +1037,7 @@ class MeasureTree:
                     DBH = np.around(np.mean(DBH_slice[:, self.cyl_dict['radius']]) * 2, 3)
                     DBH_X, DBH_Y, DBH_Z = np.mean(DBH_slice[:, :3], axis=0)
                     mean_CCI_at_BH = np.mean(DBH_slice[:, self.cyl_dict['CCI']])
-                volume_1 = np.sum((np.pi * (tree[:, self.cyl_dict['radius']] ** 2)) * np.ceil(
-                        self.parameters['cleaned_measurement_radius'] * 10) / 10)
-
+                volume_1 = tree[0, self.cyl_dict['tree_volume']]
                 volume_2 = np.pi * ((DBH/2) ** 2) * (((tree_height - 1.3)/3) + 1.3)  # Volume of cone from DBH to treetop + volume of cylinder from DBH to ground.
 
                 x_tree_base = base_northing
@@ -1173,7 +1263,7 @@ class MeasureTree:
         self.processing_report['Avg Gradient East'] = avg_gradient_east
 
         self.processing_report['Understory Veg Coverage Fraction'] = float(self.ground_veg_area) / float(self.ground_area)
-        self.processing_report['CWD Coverage Fraction'] = self.measure_total_time
+        self.processing_report['CWD Coverage Fraction'] = float(self.cwd_area) / float(self.ground_area)
 
         self.processing_report.to_csv(self.output_dir + 'processing_report.csv', index=False)
         print("Measuring plot took", self.measure_total_time, 's')

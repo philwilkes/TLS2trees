@@ -12,7 +12,7 @@ import os
 import sys
 
 
-def FSCT(parameters, preprocess=True, segmentation=True, postprocessing=True, measure_plot=True, make_report=True, clean_up_files=False):
+def FSCT(parameters, preprocess=True, segmentation=True, postprocessing=True, measure_plot=True, make_report=False, clean_up_files=False):
     print(parameters['point_cloud_filename'])
 
     if preprocess:

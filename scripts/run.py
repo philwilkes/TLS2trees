@@ -16,17 +16,18 @@ if __name__ == '__main__':
     """
     # point_clouds_to_process = directory_mode()
     # point_clouds_to_process = ['list your point cloud filepaths here']
-    # point_clouds_to_process = ['E:/PFOlsen2/PFOlsenPlots/T1_class.las']
+    # point_clouds_to_process = ['E:/PFOlsen/PFOlsenPlotsV2/T1.las']
+    # point_clouds_to_process = ['E:/Point Clouds Mixed Sources/OA_Validation_Dataset/FSCT_TEST/TLS_Benchmarking_Plot_3_SS.las']
     point_clouds_to_process = file_mode()
 
     for point_cloud_filename in point_clouds_to_process:
         parameters = dict(point_cloud_filename=point_cloud_filename,
                           # Adjust if needed
-                          plot_centre=None,  # [X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the median XY coords of the point cloud.
+                          plot_centre=None,  # [X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is computed based on the point cloud bounding box.
 
                           # Circular Plot options - Leave at 0 if not using.
-                          plot_radius=20,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
-                          plot_radius_buffer=3,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
+                          plot_radius=0,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
+                          plot_radius_buffer=0,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
 
                           # Rectangular/Tiled Plot options - Leave at 0 if not using.
                           square_grid_slicing_size=0,  # NOT YET IMPLEMENTED
@@ -38,17 +39,18 @@ if __name__ == '__main__':
 
                           # Set these appropriately for your hardware.
                           batch_size=18,  # If you get CUDA errors, try lowering this. This is suitable for 24 GB of vRAM.
-                          num_procs=10,  # Number of CPU cores you want to use. If you run out of RAM, lower this.
+                          num_procs=18,  # Number of CPU cores you want to use. If you run out of RAM, lower this.
 
                           # Optional settings - Generally leave as they are.
                           sort_stems=1,  # If you don't need the sorted stem points, turning this off speeds things up.
                                          # Veg sorting is required for tree height measurement, but stem sorting isn't necessary for general use.
 
-                          tree_base_cutoff_height=5,  # A tree must have a cylinder measurement below this height above DTM to be kept. This filters unsorted branches from being called individual trees.
+                          height_percentile=100,  # If the data contains noise above the canopy, you may wish to set this to the 98th percentile of height, otherwise leave it at 100.
+                          tree_base_cutoff_height=10,  # 5,  # A tree must have a cylinder measurement below this height above DTM to be kept. This filters unsorted branches from being called individual trees.
                           generate_output_point_cloud=1,  # Turn on if you would like a semantic and instance segmented point cloud. This mode will override the "sort_stems" setting if on.
                                                           # If you activate "tree aware plot cropping mode", this function will use it.
                           ground_veg_cutoff_height=3,  # Any vegetation points below this height are considered to be understory and are not assigned to individual trees.
-                          veg_sorting_range=5,  # Vegetation points can be, at most, this far away from a cylinder horizontally to be matched to a particular tree.
+                          veg_sorting_range=1.5,  # Vegetation points can be, at most, this far away from a cylinder horizontally to be matched to a particular tree.
                           stem_sorting_range=1,  # Stem points can be, at most, this far away from a cylinder in 3D to be matched to a particular tree.
                           low_resolution_point_cloud_hack_mode=0,  # See README.md for details. Very ugly hack that can sometimes be us-eful on low resolution point clouds.
                           maximum_stem_diameter=3,  # Any diameters greater than this will be deemed erroneous and deleted.
@@ -61,9 +63,9 @@ if __name__ == '__main__':
         FSCT(parameters=parameters,
              # Set below to 0 or 1 (or True/False). Each step requires the previous step to have been run already.
              # For standard use, just leave them all set to 1.
-             preprocess=1,
-             segmentation=1,
-             postprocessing=1,
+             preprocess=0,
+             segmentation=0,
+             postprocessing=0,
              measure_plot=1,
              make_report=0,
              clean_up_files=0)

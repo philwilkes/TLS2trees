@@ -123,7 +123,6 @@ def load_file(filename, plot_centre=None, plot_radius=0, plot_radius_buffer=0, s
         mins = np.min(pointcloud[:, :2], axis=0)
         maxes = np.max(pointcloud[:, :2], axis=0)
         plot_centre = (maxes+mins)/2
-        # print('Plot centre', plot_centre)
 
     if plot_radius > 0:
         distances = np.linalg.norm(pointcloud[:, :2] - plot_centre, axis=1)
@@ -191,7 +190,7 @@ def cluster_dbscan(points, eps=0.05, min_samples=2, n_jobs=1):
 
 
 def cluster_hdbscan(points):
-    cluster_labels = hdbscan.HDBSCAN(min_cluster_size=100).fit_predict(points[:, :3])
+    cluster_labels = hdbscan.HDBSCAN(min_cluster_size=30).fit_predict(points[:, :3])
     return np.hstack((points, np.atleast_2d(cluster_labels).T))
 
 

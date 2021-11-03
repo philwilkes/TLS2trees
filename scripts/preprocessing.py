@@ -42,8 +42,6 @@ class Preprocessing:
             maxes = np.max(self.point_cloud[:, :2], axis=0)
             self.parameters['plot_centre'] = (mins + maxes) / 2
 
-        # np.savetxt(self.output_dir + 'plot_centre_coords.csv', self.parameters['plot_centre'])
-
         if self.parameters['subsample']:
             self.point_cloud = subsample_point_cloud(self.point_cloud,
                                                      self.parameters['subsampling_min_spacing'],
@@ -64,14 +62,7 @@ class Preprocessing:
 
             save_file(self.output_dir + self.filename[:-4] + '_hack_mode_cloud.las', self.point_cloud)
 
-        self.global_shift = [np.mean(self.point_cloud[:, 0]),
-                             np.mean(self.point_cloud[:, 1]),
-                             np.mean(self.point_cloud[:, 2])]
-
-        self.point_cloud[:, :3] = self.point_cloud[:, :3] - self.global_shift
-
-        print('Global Shift:', self.global_shift, 'm')
-        np.savetxt(self.working_dir + 'global_shift.csv', self.global_shift)
+        self.point_cloud[:, :2] = self.point_cloud[:, :2] - self.parameters['plot_centre']
 
     @staticmethod
     def threaded_boxes(point_cloud, box_size, min_points_per_box, max_points_per_box, path, id_offset, point_divisions):

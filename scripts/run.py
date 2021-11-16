@@ -11,8 +11,7 @@ if __name__ == '__main__':
     
     Alternatively, you can just list the point cloud file paths.
     
-    If you have multiple point clouds and plot coords for each, you'll need to 
-    
+    If you have multiple point clouds and wish to enter plot coords for each, have a look at "run_with_multiple_plot_centres.py"
     """
     # point_clouds_to_process = directory_mode()
     # point_clouds_to_process = ['list your point cloud filepaths here']
@@ -29,24 +28,20 @@ if __name__ == '__main__':
                           plot_radius=0,  # If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.
                           plot_radius_buffer=0,  # See README. If non-zero, this is used for "Tree Aware Plot Cropping Mode".
 
-                          # Rectangular/Tiled Plot options - Leave at 0 if not using.
-                          square_grid_slicing_size=0,  # NOT YET IMPLEMENTED
-                          grid_buffer_distance=0,  # NOT YET IMPLEMENTED
-
-                          UTM_zone_number=56,  # Optional: Set this or the Lat Lon outputs will be incorrect.
-                          UTM_zone_letter='',  # Optional: Used for the plot report.
-                          UTM_is_north=False,  # If in the northern hemisphere, set this to True.
-
                           # Set these appropriately for your hardware.
                           batch_size=18,  # If you get CUDA errors, try lowering this. This is suitable for 24 GB of vRAM.
                           num_procs=18,  # Number of CPU cores you want to use. If you run out of RAM, lower this.
 
                           # Optional settings - Generally leave as they are.
+                          slice_thickness=0.15,  # If your point cloud resolution is a bit low (and only if the stem segmentation is still reasonably accurate), try increasing this to 0.2.
+                          # If your point cloud is really dense, you may get away with 0.1.
+                          slice_increment=0.05,  # The smaller this is, the better your results will be, however, this increases the run time.
+
                           sort_stems=1,  # If you don't need the sorted stem points, turning this off speeds things up.
-                                         # Veg sorting is required for tree height measurement, but stem sorting isn't necessary for general use.
+                                         # Veg sorting is required for tree height measurement, but stem sorting isn't necessary for standard use.
 
                           height_percentile=100,  # If the data contains noise above the canopy, you may wish to set this to the 98th percentile of height, otherwise leave it at 100.
-                          tree_base_cutoff_height=10,  # 5,  # A tree must have a cylinder measurement below this height above DTM to be kept. This filters unsorted branches from being called individual trees.
+                          tree_base_cutoff_height=10,  # 5,  # A tree must have a cylinder measurement below this height above the DTM to be kept. This filters unsorted branches from being called individual trees.
                           generate_output_point_cloud=1,  # Turn on if you would like a semantic and instance segmented point cloud. This mode will override the "sort_stems" setting if on.
                                                           # If you activate "tree aware plot cropping mode", this function will use it.
                           ground_veg_cutoff_height=3,  # Any vegetation points below this height are considered to be understory and are not assigned to individual trees.
@@ -62,10 +57,10 @@ if __name__ == '__main__':
         parameters.update(other_parameters)
         FSCT(parameters=parameters,
              # Set below to 0 or 1 (or True/False). Each step requires the previous step to have been run already.
-             # For standard use, just leave them all set to 1.
-             preprocess=0,
-             segmentation=0,
-             postprocessing=0,
-             measure_plot=1,
-             make_report=0,
-             clean_up_files=0)
+             # For standard use, just leave them all set to 1 except "clean_up_files".
+             preprocess=1,  # Preparation for semantic segmentation.
+             segmentation=1,  # Deep learning based semantic segmentation of the point cloud.
+             postprocessing=1,  # Creates the DTM and applies some simple rules to clean up the segmented point cloud.
+             measure_plot=1,  # The bulk of the plot measurement happens here.
+             make_report=1,  # Generates a plot report, plot map, and some other figures.
+             clean_up_files=0)  # Optionally deletes most of the large point cloud outputs to minimise storage requirements.

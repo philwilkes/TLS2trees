@@ -3,14 +3,14 @@ import pandas as pd
 from run_tools import FSCT, directory_mode, file_mode
 
 
-def combine_multiple_output_CSVs(point_clouds_to_process):
-    combined_dataframe = pd.read_csv(point_clouds_to_process[0][:-4]+'_FSCT_output/processing_report.csv', index_col=[0])
+def combine_multiple_output_CSVs(point_clouds_to_process, csv_file_to_combine):
+    combined_plot_summary_dataframe = pd.read_csv(point_clouds_to_process[0][:-4]+'_FSCT_output/' + csv_file_to_combine, index_col=[0])
     if len(point_clouds_to_process) > 1:
         for point_cloud_filename in point_clouds_to_process[1:]:
-            report_filename = point_cloud_filename[:-4]+'_FSCT_output/processing_report.csv'
+            report_filename = point_cloud_filename[:-4]+'_FSCT_output/' + csv_file_to_combine
             # print(report_filename)
-            combined_dataframe = pd.concat([combined_dataframe, pd.read_csv(report_filename, index_col=[0])])
-    return combined_dataframe
+            combined_plot_summary_dataframe = pd.concat([combined_plot_summary_dataframe, pd.read_csv(report_filename, index_col=[0])])
+    return combined_plot_summary_dataframe
 
 
 def get_lowest_common_directory(point_clouds_to_process):
@@ -47,8 +47,11 @@ if __name__ == '__main__':
     point_clouds_to_process = file_mode()
 
     output_directory = get_lowest_common_directory(point_clouds_to_process)
-    combined_dataframe = combine_multiple_output_CSVs(point_clouds_to_process)
-    combined_dataframe.to_csv(output_directory+'/combined_processing_reports.csv', sep=',')
+    combined_plot_summary_dataframe = combine_multiple_output_CSVs(point_clouds_to_process, "plot_summary.csv")
+    combined_plot_summary_dataframe.to_csv(output_directory + '/combined_plot_summaries.csv', sep=',')
+
+    combined_tree_data = combine_multiple_output_CSVs(point_clouds_to_process, "tree_data.csv")
+    combined_tree_data.to_csv(output_directory + '/combined_tree_data.csv', sep=',')
 
 
 

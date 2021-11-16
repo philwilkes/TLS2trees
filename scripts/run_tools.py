@@ -1,15 +1,12 @@
 from preprocessing import Preprocessing
 from inference import SemanticSegmentation
 from post_segmentation_script import PostProcessing
+from measure import MeasureTree
 from report_writer import ReportWriter
 import glob
-import numpy as np
-from measure import MeasureTree
 import tkinter as tk
 import tkinter.filedialog as fd
 import glob
-import os
-import sys
 
 
 def FSCT(parameters, preprocess=True, segmentation=True, postprocessing=True, measure_plot=True, make_report=False, clean_up_files=False):

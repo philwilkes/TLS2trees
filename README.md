@@ -44,9 +44,10 @@ Future versions may make this a bit nicer/add data tables/etc.
 
 **tree_data.csv**
 Basic measurements of the trees.
-Headings are as follows (all units are in metres or cubic metres for volume)
+* Headings are as follows (all units are in metres or cubic metres for volume)
 [x_tree_base, y_tree_base, z_tree_base, DBH, Height, Volume_1, Volume_2, Crown_mean_x, Crown_mean_y, Crown_top_x, Crown_top_y, Crown_top_z, mean_understory_height_in_5m_radius]
-*Volume_1 is the sum of the volume of the fitted cylinders. Volume_2 is the volume of a cone (with a base diameter equal to the DBH and height from 1.3 m up to the tree height) + 
+* Volume_1 is the sum of the volume of the fitted cylinders. 
+* Volume_2 is the volume of a cone (with a base diameter equal to the DBH and height from 1.3 m up to the tree height) + 
 the volume of a cylinder (with a diameter of DBH and 1.3 m tall). This avoids the possibility of a short and shallow 
 angled cone resulting from a short tree with a large DBH.* 
 
@@ -54,8 +55,6 @@ angled cone resulting from a short tree with a large DBH.*
 Summary information about the plot and the processing times. Be aware: if you open this while processing and FSCT
 attempts to write to the open file, it will throw a permission error.
 
-**plot_extents.csv**
-Latitude and longitude coordinates of a rectangle defined by the edges of the plot and the plot centre.
 
 ![simple_outputs.png](readme_images/simple_outputs.png)
 
@@ -102,16 +101,12 @@ instance segmentation training datasets, however, this will likely require you t
 enough quality for training data.
 
 
-
-
 **text_point_cloud.las** A point cloud text visualisation of TreeId, DBH, height, CCI at breast height, Volume_1 and 
 Volume_2. It's a bit dodgy, but it works in any point cloud viewer without fuss.
 
 **tree_aware_cropped_point_cloud.las** If you specify a plot_radius and a plot_radius_buffer, this will trim the point
 cloud to the plot_radius. See the **Tree Aware Plot Cropping** section in User Parameters for more information on this mode.
 ![individual_tree_segmentation.png](readme_images/individual_tree_segmentation.png)
-
-
 
 
 ### Recommended PC Specifications
@@ -166,15 +161,6 @@ This mode is used if plot_radius is non-zero and plot_radius_buffer is non-zero.
 #### PlotId
 The "PlotId" is taken from the filename of the input point cloud, so name files accordingly.
 
-#### UTM_zone_number
-Optional: Set this or the Lat Lon outputs will be incorrect.
-
-#### UTM_zone_letter
-Optional: Used for the plot report.
-
-#### UTM_is_north
-If in the northern hemisphere, set this to True, otherwise False.
-
 ### Set these appropriately for your hardware.
 #### batch_size
 The number of samples in a batch used for the deep learning inference. This number depends on the amount of GPU memory you
@@ -214,8 +200,14 @@ You may wish to turn it off if you want to re-run/modify the segmentation code s
 
 ## Scripts
 
-**run.py** This is how you should interface with the code base.
+###Scripts you would normally interact with:
+**run.py** This is how you should interface with the code base under normal use.
 
+**combine_multiple_output_CSVs.py** This will get
+all "plot_summary.csv" files and combine them into one CSV. This will be saved in the highest common directory
+of the selected point clouds.
+
+###Scripts you would only use directly if you are modifying the software:
 **run_tools.py** A few helper functions to clean up run.py.
 
 **tools.py** Other helper functions used throughout the code base.
@@ -236,44 +228,23 @@ segmented point cloud up. Creates the class specific point clouds (terrain, vege
 **report_writer.py** Summarises the measurements in a simple report format.
 
 
+
+
 ## Known Limitations
-Young trees with a lot of branching do not currently get segmented correctly.
-
-Some large trees do not currently get measured properly as the rules don't always hold.
-
-FSCT is unlikely to output useful results on low resolution point clouds. 
-*Very high* resolution Aerial LiDAR is about the lowest it can currently cope with. If your dataset is on the borderline,
+* Young trees with a lot of branching do not currently get segmented correctly.
+* Some large trees do not currently get measured properly as the rules don't always hold.
+* FSCT is unlikely to output useful results on low resolution point clouds. 
+* *Very high* resolution Aerial LiDAR is about the lowest it can currently cope with. If your dataset is on the borderline,
 try setting low_resolution_point_cloud_hack_mode to 4 or 5 and rerunning. It's an ugly hack, but it can help sometimes.
-
-Segmentation does often miss some branches, but usually gets the bulk of them.
-
-Small branches are often not detected.
-
-Completely horizontal branches/sections may not be measured correctly from the method used.
-
-### Planned Solutions to these Limitations
-Additional training of the segmentation model to deal with younger trees and slightly lower resolution point clouds.
-
-Deep learning based cylinder fitting solution to handle greater diversity and complexity.
-A tiling mode may be developed to allow the automated input of larger point clouds and it would include the use of 
-the tree-aware-plot-cropping concept.
+* Segmentation does often miss some branches, but usually gets the bulk of them.
+* Small branches are often not detected.
+* Completely horizontal branches/sections may not be measured correctly from the method used.
 
 ## Citation
-### If you use this tool in published research, please cite:
-
-**The semantic segmentation tool is described here:**
-\
-Krisanski, S.; Taskhiri, M.S.; Gonzalez Aracil, S.; Herries, D.; Turner, P. Sensor Agnostic Semantic Segmentation of
-Structurally Diverse and Complex Forest Point Clouds Using Deep Learning. Remote Sens. 2021, 13, 1413.
-https://doi.org/10.3390/rs13081413
-
-\
-**The measurement tool is described here:**
-\
+#### If you wish to cite this work, please use the below citation. If citing for something other than a scientific journal, feel free to link to the GitHub instead.
 Krisanski, S.; Taskhiri, M.S.; Gonzalez Aracil, S.; Herries, D.; Montgomery, J.; Turner, P. Forest Structural Complexity Tool - An Open
 Source, Fully-Automated Tool for Measuring Forest Point Clouds. Remote Sens. 2021, XX, XXXX. 
 https://doi.org/XX.XXXX/rsXXXXXXXX
-
 
 ## Acknowledgements
 This research was funded by the Australian Research Council - Training Centre for Forest Value 
@@ -285,7 +256,6 @@ Group and Dr. James Montgomery from the University of Tasmania.
 Thanks to Susana Gonzalez Aracil, David Herries from Interpine Group Ltd (New Zealand) https://interpine.nz/, Allie 
 Muneri and Mohan Gurung from PF Olsen (Australia) Ltd. https://au.pfolsen.com/, who provided a number of the raw point
 clouds and plot measurements used during the development and validation of this tool.
-
 
 ## Contributing/Collaborating
 Interested in contributing to the FSCT project? Get in touch! This code is likely far from optimal, so if you find 

@@ -158,76 +158,67 @@ class Preprocessing:
         self.preprocessing_time_end = time.time()
         self.preprocessing_time_total = self.preprocessing_time_end - self.preprocessing_time_start
         print("Preprocessing took", self.preprocessing_time_total, 's')
-        processing_report_headers = ['PlotId',
-                                     'Point Cloud Filename',
-                                     'Plot Centre Northing',
-                                     'Plot Centre Easting',
-                                     'UTM Zone',
-                                     'Hemisphere',
-                                     'Plot Radius',
-                                     'Plot Radius Buffer',
-                                     'Plot Area',
-                                     'Num Trees in Plot',
-                                     'Stems/ha',
-                                     'Mean DBH',
-                                     'Median DBH',
-                                     'Min DBH',
-                                     'Max DBH',
-                                     'Mean Height',
-                                     'Median Height',
-                                     'Min Height',
-                                     'Max Height',
+        plot_summary_headers = ['PlotId',
+                                'Point Cloud Filename',
+                                'Plot Centre X',
+                                'Plot Centre Y',
+                                'Plot Radius',
+                                'Plot Radius Buffer',
+                                'Plot Area',
+                                'Num Trees in Plot',
+                                'Stems/ha',
+                                'Mean DBH',
+                                'Median DBH',
+                                'Min DBH',
+                                'Max DBH',
+                                'Mean Height',
+                                'Median Height',
+                                'Min Height',
+                                'Max Height',
 
-                                     'Mean Volume 1',
-                                     'Median Volume 1',
-                                     'Min Volume 1',
-                                     'Max Volume 1',
-                                     'Total Volume 1',
-                                     
-                                     'Mean Volume 2',
-                                     'Median Volume 2',
-                                     'Min Volume 2',
-                                     'Max Volume 2',
-                                     'Total Volume 2',
-                                     
-                                     'Avg Gradient',
-                                     'Avg Gradient North',
-                                     'Avg Gradient East',
-                                     'Canopy Gap Fraction',
-                                     'Understory Veg Coverage Fraction',
-                                     'CWD Coverage Fraction',
-                                     'Num Points Original PC',
-                                     'Num Points Trimmed PC',
-                                     'Num Points Subsampled PC',
-                                     'Num Terrain Points',
-                                     'Num Vegetation Points',
-                                     'Num CWD Points',
-                                     'Num Stem Points',
-                                     'Preprocessing Time (s)',
-                                     'Semantic Segmentation Time (s)',
-                                     'Post processing time (s)',
-                                     'Measurement Time (s)',
-                                     'Total Run Time (s)']
+                                'Mean Volume 1',
+                                'Median Volume 1',
+                                'Min Volume 1',
+                                'Max Volume 1',
+                                'Total Volume 1',
 
-        processing_report = pd.DataFrame(np.zeros((1, len(processing_report_headers))), columns=processing_report_headers)
+                                'Mean Volume 2',
+                                'Median Volume 2',
+                                'Min Volume 2',
+                                'Max Volume 2',
+                                'Total Volume 2',
 
-        processing_report['Preprocessing Time (s)'] = self.preprocessing_time_total
-        processing_report['PlotId'] = self.filename[:-4]
-        processing_report['Point Cloud Filename'] = self.parameters['point_cloud_filename']
-        processing_report['Plot Centre Northing'] = self.parameters['plot_centre'][0]
-        processing_report['Plot Centre Easting'] = self.parameters['plot_centre'][1]
-        processing_report['UTM Zone'] = str(self.parameters['UTM_zone_number']) + str(self.parameters['UTM_zone_letter'])
+                                'Avg Gradient',
+                                'Avg Gradient X',
+                                'Avg Gradient Y',
+                                'Canopy Gap Fraction',
+                                'Understory Veg Coverage Fraction',
+                                'CWD Coverage Fraction',
+                                'Num Points Original PC',
+                                'Num Points Trimmed PC',
+                                'Num Points Subsampled PC',
+                                'Num Terrain Points',
+                                'Num Vegetation Points',
+                                'Num CWD Points',
+                                'Num Stem Points',
+                                'Preprocessing Time (s)',
+                                'Semantic Segmentation Time (s)',
+                                'Post processing time (s)',
+                                'Measurement Time (s)',
+                                'Total Run Time (s)']
 
-        if self.parameters['UTM_is_north']:
-            processing_report['Hemisphere'] = 'North'
-        else:
-            processing_report['Hemisphere'] = 'South'
+        plot_summary = pd.DataFrame(np.zeros((1, len(plot_summary_headers))), columns=plot_summary_headers)
 
-        processing_report['Plot Radius'] = self.parameters['plot_radius']
-        processing_report['Plot Radius Buffer'] = self.parameters['plot_radius_buffer']
-        processing_report['Num Points Original PC'] = self.num_points_orig
-        processing_report['Num Points Trimmed PC'] = self.num_points_trimmed
-        processing_report['Num Points Subsampled PC'] = self.num_points_subsampled
+        plot_summary['Preprocessing Time (s)'] = self.preprocessing_time_total
+        plot_summary['PlotId'] = self.filename[:-4]
+        plot_summary['Point Cloud Filename'] = self.parameters['point_cloud_filename']
+        plot_summary['Plot Centre X'] = self.parameters['plot_centre'][0]
+        plot_summary['Plot Centre Y'] = self.parameters['plot_centre'][1]
+        plot_summary['Plot Radius'] = self.parameters['plot_radius']
+        plot_summary['Plot Radius Buffer'] = self.parameters['plot_radius_buffer']
+        plot_summary['Num Points Original PC'] = self.num_points_orig
+        plot_summary['Num Points Trimmed PC'] = self.num_points_trimmed
+        plot_summary['Num Points Subsampled PC'] = self.num_points_subsampled
 
-        processing_report.to_csv(self.output_dir + 'processing_report.csv', index=False)
+        plot_summary.to_csv(self.output_dir + 'plot_summary.csv', index=False)
         print("Preprocessing done\n")

@@ -75,8 +75,8 @@ class SemanticSegmentation:
 
         self.filename = 'working_point_cloud.las'
         self.directory = self.output_dir
-        self.processing_report = pd.read_csv(self.output_dir + 'processing_report.csv', index_col=None)
-        self.plot_centre = [[float(self.processing_report['Plot Centre Northing']), float(self.processing_report['Plot Centre Easting'])]]
+        self.plot_summary = pd.read_csv(self.output_dir + 'plot_summary.csv', index_col=None)
+        self.plot_centre = [[float(self.plot_summary['Plot Centre X']), float(self.plot_summary['Plot Centre Y'])]]
 
     def inference(self):
         test_dataset = TestingDataset(root_dir=self.working_dir,
@@ -120,8 +120,8 @@ class SemanticSegmentation:
 
         self.sem_seg_end_time = time.time()
         self.sem_seg_total_time = self.sem_seg_end_time - self.sem_seg_start_time
-        self.processing_report['Semantic Segmentation Time (s)'] = self.sem_seg_total_time
-        self.processing_report.to_csv(self.output_dir + 'processing_report.csv', index=False)
+        self.plot_summary['Semantic Segmentation Time (s)'] = self.sem_seg_total_time
+        self.plot_summary.to_csv(self.output_dir + 'plot_summary.csv', index=False)
         print("Semantic segmentation took", self.sem_seg_total_time, 's')
         print("Semantic segmentation done")
         if self.parameters['delete_working_directory']:

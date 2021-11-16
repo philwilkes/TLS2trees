@@ -189,8 +189,8 @@ def cluster_dbscan(points, eps=0.05, min_samples=2, n_jobs=1):
     return np.hstack((points, np.atleast_2d(db.labels_).T))
 
 
-def cluster_hdbscan(points):
-    cluster_labels = hdbscan.HDBSCAN(min_cluster_size=30).fit_predict(points[:, :3])
+def cluster_hdbscan(points, min_cluster_size=30):
+    cluster_labels = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size).fit_predict(points[:, :3])
     return np.hstack((points, np.atleast_2d(cluster_labels).T))
 
 

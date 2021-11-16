@@ -5,8 +5,6 @@ import pandas as pd
 import numpy as np
 from tools import load_file, subsample_point_cloud
 from matplotlib import pyplot as plt
-import utm
-import simplekml
 import os
 from scipy.spatial import ConvexHull
 from matplotlib import cm
@@ -20,17 +18,17 @@ class ReportWriter:
     def __init__(self, parameters):
         self.parameters = parameters
         self.filename = self.parameters['point_cloud_filename'].replace('\\', '/')
-        self.output_dir = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/' + \
-                          self.filename.split('/')[-1][:-4] + '_FSCT_output/'
+        self.output_dir = os.path.dirname(os.path.realpath(self.filename)).replace('\\', '/') + '/' + self.filename.split('/')[-1][:-4] + '_FSCT_output/'
         self.filename = self.filename.split('/')[-1]
-        self.processing_report = pd.read_csv(self.output_dir + 'processing_report.csv', index_col=False)
-        self.parameters['plot_centre'] = [float(self.processing_report['Plot Centre Northing']),
-                                          float(self.processing_report['Plot Centre Easting'])]
-        self.plot_area = float(self.processing_report['Plot Area'])
-        self.stems_per_ha = int(self.processing_report['Stems/ha'])
-        self.parameters['plot_radius'] = float(self.processing_report['Plot Radius'])
-        self.parameters['plot_radius_buffer'] = float(self.processing_report['Plot Radius Buffer'])
-        self.parameters['UTM_zone_number'] = float(self.processing_report['UTM Zone'])
+        self.plot_summary = pd.read_csv(self.output_dir + 'plot_summary.csv', index_col=False)
+
+        self.parameters['plot_centre'] = [float(self.plot_summary['Plot Centre X']),
+                                          float(self.plot_summary['Plot Centre X'])]
+
+        self.plot_area = float(self.plot_summary['Plot Area'])
+        self.stems_per_ha = int(self.plot_summary['Stems/ha'])
+        self.parameters['plot_radius'] = float(self.plot_summary['Plot Radius'])
+        self.parameters['plot_radius_buffer'] = float(self.plot_summary['Plot Radius Buffer'])
 
         self.tree_data = pd.read_csv(self.output_dir + 'tree_data.csv')
         self.TreeId = np.array(self.tree_data['TreeId'])
@@ -40,13 +38,6 @@ class ReportWriter:
         self.height = np.array(self.tree_data['Height'])
         self.Volume_1 = np.array(self.tree_data['Volume_1'])
         self.Volume_2 = np.array(self.tree_data['Volume_2'])
-
-        self.plot_centre_lat, self.plot_centre_lon = utm.to_latlon(easting=self.parameters['plot_centre'][0],
-                                                                   northing=self.parameters['plot_centre'][1],
-                                                                   zone_number=self.parameters['UTM_zone_number'],
-                                                                   zone_letter=self.parameters['UTM_zone_letter'],
-                                                                   northern=self.parameters['UTM_is_north'],
-                                                                   strict=None)
 
     def make_report(self):
         self.plot_outputs()
@@ -82,25 +73,20 @@ class ReportWriter:
         filename = self.output_dir + 'Plot_Report'
         mdFile = MdUtils(file_name=filename, title='Forest Structural Complexity Tool - Plot Report')
         mdFile.new_header(level=1, title='')  # style is set 'atx' format by default.
-        if self.parameters['UTM_is_north']:
-            hemisphere = 'North'
-        else:
-            hemisphere = 'South'
         level = 2
 
         mdFile.new_header(level=level, title='Point Cloud Filename: ' + self.filename)
-        mdFile.new_header(level=level,
-                          title='Plot Centre: ' + str(np.around(self.parameters['plot_centre'][0], 2)) + ' N, ' + str(
-                                  np.around(self.parameters['plot_centre'][1], 2)) + ' E, UTM Zone: ' + ' ' + str(
-                                  self.parameters['UTM_zone_number']) + ' ' + str(
-                                  self.parameters['UTM_zone_letter']) + ', Hemisphere: ' + hemisphere)
-        mdFile.new_header(level=level,
-                          title='Plot Centre (Lat Lon): ' + str(np.around(self.plot_centre_lat, 5)) + ', ' + str(
-                              np.around(self.plot_centre_lon, 5)))
 
-        mdFile.new_header(level=level, title='Plot Radius: ' + str(
-                self.parameters['plot_radius']) + ' m, ' + ' Plot Radius Buffer: ' + str(
-                self.parameters['plot_radius_buffer']) + ' m, Plot Area: ' + str(np.around(self.plot_area, 3)) + ' ha')
+        mdFile.new_header(level=level,
+                          title='Plot Centre (Local coords): X: ' + str(np.around(self.parameters['plot_centre'][0], 2)) + ' m, Y: ' +
+                                str(np.around(self.parameters['plot_centre'][1], 2)) + ' m')
+        if self.parameters['plot_radius'] != 0:
+            mdFile.new_header(level=level, title='Plot Radius: ' + str(
+                    self.parameters['plot_radius']) + ' m, ' + ' Plot Radius Buffer: ' + str(
+                    self.parameters['plot_radius_buffer']) + ' m, Plot Area: ' + str(np.around(self.plot_area, 3)) + ' ha')
+        else:
+            mdFile.new_header(level=level, title='Plot Area: ' + str(
+                np.around(self.plot_area, 3)) + ' ha')
 
         if self.DBH.shape[0] > 0:
             mdFile.new_header(level=level, title='Stems/ha:  ' + str(self.stems_per_ha))
@@ -118,12 +104,11 @@ class ReportWriter:
             mdFile.new_header(level=level, title='Stems/ha: 0')
             mdFile.new_header(level=level, title='No stems found.')
 
-        total_processing_time = float(self.processing_report['Total Run Time (s)'])
+        total_processing_time = float(self.plot_summary['Total Run Time (s)'])
 
         mdFile.new_header(level=level,
                           title='FSCT Processing Time: ' + str(np.around(total_processing_time / 60., 1)) + ' minutes')
-        # TODO Replace absolute paths with relative paths in Plot_report.html as links break when folders are moved but relative links would work.
-        # path = self.output_dir + "Stem_Map.png"
+
         path = "Stem_Map.png"
         mdFile.new_paragraph(Html.image(path=path, size='1000'))
 
@@ -150,7 +135,6 @@ class ReportWriter:
         self.cwd_points, _ = load_file(self.output_dir + 'cwd_points.las')
         self.veg_dict = dict(x=0, y=1, z=2, red=3, green=4, blue=5, tree_id=6, height_above_dtm=7)
         self.ground_veg, _ = load_file(self.output_dir + 'ground_veg.las', headers_of_interest=list(self.veg_dict))
-        self.kml = simplekml.Kml()
 
         self.ground_veg_map = self.ground_veg[:, [0, 1, self.veg_dict['height_above_dtm']]]
         self.ground_veg_map[self.ground_veg[:, self.veg_dict['height_above_dtm']] >= 0.5, 2] = 1
@@ -162,41 +146,6 @@ class ReportWriter:
         plot_centre = (dtmmin + dtmmax) / 2
         if self.parameters['plot_centre'] is None:
             self.parameters['plot_centre'] = plot_centre
-
-        dtm_boundaries = [[np.min(self.DTM[:, 0]), np.min(self.DTM[:, 1]), 'SouthWestCorner'],
-                          [np.min(self.DTM[:, 0]), np.max(self.DTM[:, 1]), 'NorthWestCorner'],
-                          [np.max(self.DTM[:, 0]), np.min(self.DTM[:, 1]), 'SouthEastCorner'],
-                          [np.max(self.DTM[:, 0]), np.max(self.DTM[:, 1]), 'NorthEastCorner']]
-
-        dtm_boundaries_lat = []
-        dtm_boundaries_lon = []
-        dtm_boundaries_names = []
-        for i in dtm_boundaries:
-            lat, lon = utm.to_latlon(easting=i[0],
-                                     northing=i[1],
-                                     zone_number=self.parameters['UTM_zone_number'],
-                                     zone_letter=self.parameters['UTM_zone_letter'],
-                                     northern=self.parameters['UTM_is_north'],
-                                     strict=None)
-
-            dtm_boundaries_lat.append(lat)
-            dtm_boundaries_lon.append(lon)
-            dtm_boundaries_names.append(i[2])
-
-        plot_centre_lat, plot_centre_lon = utm.to_latlon(easting=plot_centre[0],
-                                                         northing=plot_centre[1],
-                                                         zone_number=self.parameters['UTM_zone_number'],
-                                                         zone_letter=self.parameters['UTM_zone_letter'],
-                                                         northern=self.parameters['UTM_is_north'],
-                                                         strict=None)
-        dtm_boundaries_lat.append(plot_centre_lat)
-        dtm_boundaries_lon.append(plot_centre_lon)
-        dtm_boundaries_names.append('PlotCentre')
-
-        dtm_boundaries = np.array([dtm_boundaries_lat, dtm_boundaries_lon, dtm_boundaries_names]).T
-        pd.DataFrame(dtm_boundaries).to_csv(self.output_dir + 'Plot_Extents.csv', header=False, index=None, sep=',')
-        for i in dtm_boundaries:
-            self.kml.newpoint(name=i[2], coords=[(i[1], i[0])], description='Boundary point')
 
         fig1 = plt.figure(figsize=(7, 7))
         ax1 = fig1.add_subplot(1, 1, 1)
@@ -285,7 +234,6 @@ class ReportWriter:
                    ncol=2,
                    facecolor="white")
 
-        fig1.show(False)
         fig1.savefig(self.output_dir + 'Stem_Map.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
         plt.close()
 
@@ -304,7 +252,6 @@ class ReportWriter:
                      linewidth=0.5,
                      edgecolor='black',
                      facecolor='green')
-            fig2.show(False)
         fig2.savefig(self.output_dir + 'Diameter at Breast Height Distribution.png', dpi=600, bbox_inches='tight',
                      pad_inches=0.0)
         plt.close()
@@ -324,7 +271,6 @@ class ReportWriter:
                      linewidth=0.5,
                      edgecolor='black',
                      facecolor='green')
-            fig3.show(False)
         fig3.savefig(self.output_dir + 'Tree Height Distribution.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
         plt.close()
 
@@ -343,7 +289,6 @@ class ReportWriter:
                      linewidth=0.5,
                      edgecolor='black',
                      facecolor='green')
-            fig4.show(False)
         fig4.savefig(self.output_dir + 'Tree Volume 1 Distribution.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
         plt.close()
 
@@ -362,6 +307,5 @@ class ReportWriter:
                      linewidth=0.5,
                      edgecolor='black',
                      facecolor='green')
-            fig4.show(False)
         fig4.savefig(self.output_dir + 'Tree Volume 2 Distribution.png', dpi=600, bbox_inches='tight', pad_inches=0.0)
         plt.close()

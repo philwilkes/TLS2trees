@@ -46,7 +46,7 @@ class PostProcessing:
         self.headers_of_interest.append('height_above_DTM')  # Add height_above_DTM to the headers.
         self.label_index = self.headers_of_interest.index('label')
         self.point_cloud[:, self.label_index] = self.point_cloud[:, self.label_index] + 1  # index offset since noise_class was removed from inference.
-        self.processing_report = pd.read_csv(self.output_dir + 'processing_report.csv', index_col=None)
+        self.plot_summary = pd.read_csv(self.output_dir + 'plot_summary.csv', index_col=None)
 
     def make_DTM(self, crop_dtm=False):
         print("Making DTM...")
@@ -62,7 +62,7 @@ class PostProcessing:
 
         for x in x_points:
             for y in y_points:
-                radius = self.parameters['grid_resolution']*2
+                radius = self.parameters['grid_resolution']*3
                 indices = terrain_kdtree.query_ball_point([x, y], r=radius)
                 while len(indices) <= 100 and radius <= self.parameters['grid_resolution'] * 5:
                     radius += self.parameters['grid_resolution']
@@ -81,7 +81,7 @@ class PostProcessing:
                     grid_points = np.vstack((grid_points, np.array([[x, y, z]])))
 
         if self.parameters['plot_radius'] > 0:
-            plot_centre = [[float(self.processing_report['Plot Centre Northing']), float(self.processing_report['Plot Centre Easting'])]]
+            plot_centre = [[float(self.plot_summary['Plot Centre Northing']), float(self.plot_summary['Plot Centre Easting'])]]
             crop_radius = self.parameters['plot_radius'] + self.parameters['plot_radius_buffer']
             grid_points = grid_points[np.linalg.norm(grid_points[:, :2] - plot_centre, axis=1) <= crop_radius]
 
@@ -97,15 +97,10 @@ class PostProcessing:
         self.DTM = self.make_DTM(crop_dtm=True)
         save_file(self.output_dir + 'DTM.las', self.DTM)
 
-        # self.DTM, _ = load_file(self.output_dir + 'DTM.las')
-
-        if self.parameters['plot_radius'] is not None or self.parameters['plot_radius'] != 0:
-            self.plot_area_estimate = np.pi*(self.parameters['plot_radius'])**2
-        else:
-            self.convexhull = spatial.ConvexHull(self.terrain_points[:, :2])
-            self.convex_hull_points = self.terrain_points[self.convexhull.vertices, :2]
-            self.plot_area_estimate = self.convexhull.volume  # volume is area in 2d.
-        print("Plot area is approximately", self.plot_area_estimate, "m^2 or", self.plot_area_estimate / 10000, 'ha')
+        self.convexhull = spatial.ConvexHull(self.DTM[:, :2])
+        self.convex_hull_points = self.terrain_points[self.convexhull.vertices, :2]
+        self.plot_area = self.convexhull.volume/10000  # volume is area in 2d.
+        print("Plot area is approximately", self.plot_area, 'ha')
 
         above_and_below_DTM_trim_dist = 0.2
 
@@ -142,11 +137,12 @@ class PostProcessing:
         self.post_processing_time_end = time.time()
         self.post_processing_time = self.post_processing_time_end - self.post_processing_time_start
         print("Post-processing took", self.post_processing_time, 'seconds')
-        self.processing_report['Post processing time (s)'] = self.post_processing_time
-        self.processing_report['Num Terrain Points'] = self.terrain_points.shape[0]
-        self.processing_report['Num Vegetation Points'] = self.vegetation_points.shape[0]
-        self.processing_report['Num CWD Points'] = self.cwd_points.shape[0]
-        self.processing_report['Num Stem Points'] = self.stem_points.shape[0]
-        self.processing_report['Post processing time (s)'] = self.post_processing_time
-        self.processing_report.to_csv(self.output_dir + 'processing_report.csv', index=False)
+        self.plot_summary['Post processing time (s)'] = self.post_processing_time
+        self.plot_summary['Num Terrain Points'] = self.terrain_points.shape[0]
+        self.plot_summary['Num Vegetation Points'] = self.vegetation_points.shape[0]
+        self.plot_summary['Num CWD Points'] = self.cwd_points.shape[0]
+        self.plot_summary['Num Stem Points'] = self.stem_points.shape[0]
+        self.plot_summary['Plot Area'] = self.plot_area
+        self.plot_summary['Post processing time (s)'] = self.post_processing_time
+        self.plot_summary.to_csv(self.output_dir + 'plot_summary.csv', index=False)
         print("Post processing done.")

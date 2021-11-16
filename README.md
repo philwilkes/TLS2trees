@@ -14,7 +14,9 @@ will likely label the stems as vegetation points instead.
 There are also some instances where the segmentation model has not seen appropriate training data for the point cloud.
 This may be improved in future versions, as it should be easily fixed with additional training data.
 
-#TODO https://www.youtube.com/watch?v=4kBeU3Wcz9k
+<video src="https://youtu.be/rej5Bu57AqM" controls="controls" style="max-width: 730px;">
+</video>
+
 
 ## Installation
 
@@ -106,6 +108,7 @@ Volume_2. It's a bit dodgy, but it works in any point cloud viewer without fuss.
 
 **tree_aware_cropped_point_cloud.las** If you specify a plot_radius and a plot_radius_buffer, this will trim the point
 cloud to the plot_radius. See the **Tree Aware Plot Cropping** section in User Parameters for more information on this mode.
+
 ![individual_tree_segmentation.png](readme_images/individual_tree_segmentation.png)
 
 

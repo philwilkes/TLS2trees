@@ -140,12 +140,6 @@ If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped fr
 #### plot_radius_buffer
 This is used for "Tree Aware Plot Cropping Mode". Leave at 0 if not using.
 
-### Rectangular/Tiled Plot options (NOT YET IMPLEMENTED)
-This will be a tile-based version of "Tree Aware Plot Cropping Mode" once implemented.
-#### x_length=0,
-#### y_length=0,
-#### edge_buffer=0,
-
 ### Tree Aware Plot Cropping
 The purpose of this mode is to simulate the behaviour of a typical field plot, by not chopping trees in half if they are
 at the boundary of the plot radius.
@@ -185,16 +179,6 @@ If you don't need the sorted stem points, turning this off speeds things up. Veg
 
 #### stem_sorting_range
 Stem points can be, at most, this far away from a cylinder in 3D to be matched to a particular tree.
-
-#### low_resolution_point_cloud_hack_mode
-This model was trained on relatively high resolution point clouds, so if a stem is of sufficiently low resolution,
-it will likely be classified as vegetation instead. Eventually, I may train this model on a larger training dataset
-with more examples of sparse point clouds, however, in the meantime, I came up with an ugly hack that
-sometimes helps a little when working with low resolution datasets (which this tool was not really designed for).
-
-Low resolution hack mode will copy the input point cloud, jitter the points in random directions by 1 cm, then join this
-copied point cloud to the original point cloud. This gives the model more points to work with, which is closer to what
-it was trained on. Once inference is complete, the original point cloud is returned.
 
 #### delete_working_directory
 Generally leave this on. Deletes the files used for segmentation after segmentation is finished.

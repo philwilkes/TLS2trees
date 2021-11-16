@@ -47,7 +47,6 @@ if __name__ == '__main__':
                           ground_veg_cutoff_height=3,  # Any vegetation points below this height are considered to be understory and are not assigned to individual trees.
                           veg_sorting_range=1.5,  # Vegetation points can be, at most, this far away from a cylinder horizontally to be matched to a particular tree.
                           stem_sorting_range=1,  # Stem points can be, at most, this far away from a cylinder in 3D to be matched to a particular tree.
-                          low_resolution_point_cloud_hack_mode=0,  # See README.md for details. Very ugly hack that can sometimes be us-eful on low resolution point clouds.
                           maximum_stem_diameter=3,  # Any diameters greater than this will be deemed erroneous and deleted.
                           delete_working_directory=True,  # Generally leave this on. Deletes the files used for segmentation after segmentation is finished.
                                                           # You may wish to turn it off if you want to re-run/modify the segmentation code so you don't need to run pre-processing every time.

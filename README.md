@@ -14,9 +14,8 @@ will likely label the stems as vegetation points instead.
 There are also some instances where the segmentation model has not seen appropriate training data for the point cloud.
 This may be improved in future versions, as it should be easily fixed with additional training data.
 
-<figure class="video_container">
-  <iframe src="https://youtu.be/rej5Bu57AqM" frameborder="0" allowfullscreen="true"> </iframe>
-</figure>
+**A video showing the outputs of the tool is provided here: https://youtu.be/rej5Bu57AqM**
+
 
 ## Installation
 

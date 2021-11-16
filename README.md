@@ -221,7 +221,7 @@ segmented point cloud up. Creates the class specific point clouds (terrain, vege
 * Some large trees do not currently get measured properly as the rules don't always hold.
 * FSCT is unlikely to output useful results on low resolution point clouds. 
 * *Very high* resolution Aerial LiDAR is about the lowest it can currently cope with. If your dataset is on the borderline,
-try setting low_resolution_point_cloud_hack_mode to 4 or 5 and rerunning. It's an ugly hack, but it can help sometimes.
+try setting low_resolution_point_cloud_hack_mode (in other_parameters.py) to 4 or 5 and rerunning. It's an ugly hack, but it can help sometimes.
 * Segmentation does often miss some branches, but usually gets the bulk of them.
 * Small branches are often not detected.
 * Completely horizontal branches/sections may not be measured correctly from the method used.

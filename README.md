@@ -132,7 +132,7 @@ Hopefully in time, I'll be able to make this more efficient and less resource hu
 
 ### Circular Plot options
 #### plot_centre
-[X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the median XY coords of the point cloud. Leave at None if not using.
+[X, Y] Coordinates of the plot centre (metres). If "None", plot_centre is the centre of the bounding box of the point cloud. Leave at None if not using.
 
 #### plot_radius
 If 0 m, the plot is not cropped. Otherwise, the plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer. Leave at 0 if not using.
@@ -228,9 +228,7 @@ try setting low_resolution_point_cloud_hack_mode (in other_parameters.py) to 4 o
 
 ## Citation
 #### If you wish to cite this work, please use the below citation. If citing for something other than a scientific journal, feel free to link to the GitHub instead.
-Krisanski, S.; Taskhiri, M.S.; Gonzalez Aracil, S.; Herries, D.; Montgomery, J.; Turner, P. Forest Structural Complexity Tool - An Open
-Source, Fully-Automated Tool for Measuring Forest Point Clouds. Remote Sens. 2021, XX, XXXX. 
-https://doi.org/XX.XXXX/rsXXXXXXXX
+Krisanski, S.; Taskhiri, M.S.; Gonzalez Aracil, S.; Herries, D.; Muneri, A.; Gurung, M.B.; Montgomery, J.; Turner, P. Forest Structural Complexity Tool—An Open Source, Fully-Automated Tool for Measuring Forest Point Clouds. Remote Sens. 2021, 13, 4677. https://doi.org/10.3390/rs13224677
 
 ## Acknowledgements
 This research was funded by the Australian Research Council - Training Centre for Forest Value 

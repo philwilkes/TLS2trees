@@ -124,7 +124,6 @@ I use the following setup and the computational times are tolerable:
 - CPU: Intel i9-10900K (overclocked to 4.99GHz all cores).
 - GPU: Nvidia Titan RTX (24 GB vRAM)
 - RAM: 128 GB DDR4 at 3200 MHz (If you run out of RAM, try increasing your page file size (Windows) or swap size (Linux))
-- SSD: M.2 NVMe 2 TB, 3500 MB/s read,  3000 MB/s write.
 
 Hopefully in time, I'll be able to make this more efficient and less resource hungry.
 

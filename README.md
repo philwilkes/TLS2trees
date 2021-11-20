@@ -185,14 +185,14 @@ You may wish to turn it off if you want to re-run/modify the segmentation code s
 
 ## Scripts
 
-###Scripts you would normally interact with:
+### Scripts you would normally interact with:
 **run.py** This is how you should interface with the code base under normal use.
 
 **combine_multiple_output_CSVs.py** This will get
 all "plot_summary.csv" files and combine them into one CSV. This will be saved in the highest common directory
 of the selected point clouds.
 
-###Scripts you would only use directly if you are modifying the software:
+### Scripts you would only use directly if you are modifying the software:
 **run_tools.py** A few helper functions to clean up run.py.
 
 **tools.py** Other helper functions used throughout the code base.

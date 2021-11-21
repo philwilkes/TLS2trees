@@ -14,9 +14,7 @@ if __name__ == '__main__':
     If you have multiple point clouds and wish to enter plot coords for each, have a look at "run_with_multiple_plot_centres.py"
     """
     # point_clouds_to_process = directory_mode()
-    # point_clouds_to_process = ['list your point cloud filepaths here']
-    # point_clouds_to_process = ['E:/PFOlsen/PFOlsenPlotsV2/T1.las']
-    # point_clouds_to_process = ['E:/Point Clouds Mixed Sources/OA_Validation_Dataset/FSCT_TEST/TLS_Benchmarking_Plot_3_SS.las']
+    # point_clouds_to_process = ['full_path_to_your_point_cloud.las', 'full_path_to_your_second_point_cloud.las', etc.]
     point_clouds_to_process = file_mode()
 
     for point_cloud_filename in point_clouds_to_process:

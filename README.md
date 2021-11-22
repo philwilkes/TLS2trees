@@ -1,4 +1,4 @@
-# FSCT (lite)
+# FSCT _lite_
 
 This repo is forked from @SKrisanski and is a _lite_ version that only runs the semantic segmentation (ground, wood, leaf, cwd). Followig classification an instance segmenation can be run to seperate individual trees.
 

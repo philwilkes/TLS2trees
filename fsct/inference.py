@@ -123,7 +123,7 @@ def SemanticSegmentation(params):
               additional_fields=['label', 'nz', 'pTerrain', 'pLeaf', 'pCWD', 'pWood'])
 
     params.sem_seg_total_time = time.time() - params.sem_seg_start_time
-    if params.delete_working_directory: [os.unlink(f) for f in test_dataset.filenames]
+    if not params.keep_npy: [os.unlink(f) for f in test_dataset.filenames]
     print("semantic segmentation done in", params.sem_seg_total_time, 's\n')
     
     return params

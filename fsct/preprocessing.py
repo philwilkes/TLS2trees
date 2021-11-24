@@ -38,8 +38,6 @@ def Preprocessing(params):
 
     # read in pc
     params.pc = load_file(filename=params.point_cloud,
-                          plot_centre=params.plot_centre,
-                          plot_radius=params.plot_radius,
                           verbose=params.verbose)
 
     # compute plot centre, global shift and bounding box

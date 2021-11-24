@@ -1,8 +1,6 @@
 # FSCT _lite_
 
-This repo is forked from @SKrisanski and is a _lite_ version that only runs the semantic segmentation (ground, wood, leaf, cwd). Followig classification an instance segmenation can be run to seperate individual trees.
-
-Typical usage is:
+This repo is forked from @SKrisanski and is a _lite_ version that only runs the semantic segmentation (ground, wood, leaf, cwd). Typical usage is:
 
 `python run.py -p <point_cloud> --tile-index <path_to_index> --buffer <buffer> --verbose`
 
@@ -28,7 +26,7 @@ optional arguments:
   --verbose             print stuff
   ```
   
-Individual tree segmentation can be run with:
+Followig classification an instance segmenation can be run to seperate individual trees with:
 
 `python points2trees.py -i . --odir ../clouds/ --verbose --n-prcs 10 --add-leaves`
 

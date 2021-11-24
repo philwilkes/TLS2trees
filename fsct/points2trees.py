@@ -119,7 +119,10 @@ def add_leaves(fn, params):
     edges = from_to_all.groupby(['source', 'target']).length.min().reset_index()
     # remove edges that are likely leaps between trees
     #         edges = edges.loc[edges.length <= .2]
-    edges = edges.loc[edges.length <= 1]
+    # edges = edges.loc[edges.length <= 1]
+    edges = edges.loc[edges.length <= .5]
+
+    print(edges)
 
     # compute graph
     G = nx.from_pandas_edgelist(edges, edge_attr=['length'])
@@ -158,9 +161,9 @@ def add_leaves(fn, params):
     for lv in lvs.base.unique():
 
         if os.path.isfile(os.path.join(params.odir, f'T{int(lv)}.leafon.ply')):
-            with args.Lock: stem = ply_io.read_ply(os.path.join(params.odir, f'T{int(lv)}.leafon.ply'))
+            with params.Lock: stem = ply_io.read_ply(os.path.join(params.odir, f'T{int(lv)}.leafon.ply'))
         else:
-            with args.Lock: stem = ply_io.read_ply(os.path.join(params.odir, f'T{int(lv)}.leafoff.ply'))
+            with params.Lock: stem = ply_io.read_ply(os.path.join(params.odir, f'T{int(lv)}.leafoff.ply'))
             stem.loc[:, 'wood'] = 1
 
         l2a = lvs.loc[lvs.base == lv]
@@ -168,14 +171,14 @@ def add_leaves(fn, params):
         stem = stem.append(l2a[['x', 'y', 'z', 'red', 'green', 'blue', 'base', 'wood', 'distance']])
 
         stem = stem.loc[~stem.duplicated()]
-        with args.Lock: ply_io.write_ply(os.path.join(params.odir, f'T{int(lv)}.leafon.ply'), stem)
+        with params.Lock: ply_io.write_ply(os.path.join(params.odir, f'T{int(lv)}.leafon.ply'), stem)
 
     
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--idir', '-i', type=str, default='', required=True, help='fsct directory')
-    parser.add_argument('--odir', '-o', type=str, required=True, help='fsct directory')
+    parser.add_argument('--odir', '-o', type=str, required=True, help='output directory')
     parser.add_argument('--box-length', default=10, type=float, help='processing grid size')
     parser.add_argument('--overlap', default=5, type=float, help='grid overlap')
     parser.add_argument('--n-prcs', default=5, type=int, help='number of cores')
@@ -286,6 +289,8 @@ if __name__ == '__main__':
         Pool = multiprocessing.Pool(params.n_prcs)
         m = multiprocessing.Manager()
         params.Lock = m.Lock()
+
+        #add_leaves('129.downsample.segmented.ply', params)
 
         Pool.starmap_async(add_leaves, 
                            tqdm([(fn, params) for fn in glob.glob(os.path.join(params.idir, '*.segmented.ply'))], 

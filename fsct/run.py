@@ -21,20 +21,16 @@ if __name__ == '__main__':
     # run or redo steps
     parser.add_argument('--step', type=int, default=3, help='which process to run to')
     parser.add_argument('--redo', type=int, default=None, help='which process to run to')
-    
-    # point cloud sampling
-    parser.add_argument('--plot_centre', nargs=2, default=None, help="[X, Y] Coordinates of the plot centre (metres).")
-    parser.add_argument('--plot_radius', type=float, default=0, help="The plot is cylindrically cropped from the plot centre with plot_radius + plot_radius_buffer.")
 
     # if applying to tiled data
-    parser.add_argument('--tile-index', default='', type=str, help='path to tile index')
-    parser.add_argument('--buffer', default=0, type=float, help='path to point cloud')
+    parser.add_argument('--tile-index', default='', type=str, help='path to tile index in space delimited format "TILE X Y"')
+    parser.add_argument('--buffer', default=0, type=float, help='included data from neighbouring tiles')
     
     # Set these appropriately for your hardware.
     parser.add_argument('--batch_size', default=10, type=int, help="If you get CUDA errors, try lowering this.")
     parser.add_argument('--num_procs', default=10, type=int, help="Number of CPU cores you want to use. If you run out of RAM, lower this.")
 
-    parser.add_argument('--delete-working-directory', action='store_false', help="Deletes .npy files used for segmentation after segmentation is finished.")
+    parser.add_argument('--keep-npy', action='store_true', help="Keeps .npy files used for segmentation after inference is finished.")
                            
     parser.add_argument('--output_fmt', default='ply', help="file type of output")
     parser.add_argument('--verbose', action='store_true', help="print stuff")

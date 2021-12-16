@@ -67,9 +67,12 @@ def write_ply(output_name, pc, comments=[]):
             ply.write("property int blue\n")
         for col in pc.columns:
             if col in cols: continue
-            cols += [col]
-            pc[col] = pc[col].astype('f8')
-            ply.write("property float64 {}\n".format(col))
+            try:
+                pc[col] = pc[col].astype('f8')
+                ply.write("property float64 {}\n".format(col))
+                cols += [col]
+            except:
+                pass
         ply.write("end_header\n")
 
     with open(output_name, 'ab') as ply:

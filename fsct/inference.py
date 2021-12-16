@@ -111,16 +111,19 @@ def SemanticSegmentation(params):
     #          pd.concat([params.pc, probs]), 
     #          additional_fields=['label', 'nz'])
     #          additional_fields=['label', 'pTerrain', 'pLeaf', 'pWood', 'pCWD']) 
-    
+   
+    #idx = (params.pc.label == 1) & (params.pc.pWood > .12)
+    #params.pc.loc[idx, 'label'] = params.stem_class
+ 
     params.pc[['x', 'y', 'z']] += params.global_shift
 
     # calcualte height abouve ground and add ground normalised field
     params = make_dtm(params)
-    params.pc.loc[params.pc.nz <= params.ground_height_threshold, 'label'] = params.terrain_class
+    params.pc.loc[params.pc.n_z <= params.ground_height_threshold, 'label'] = params.terrain_class
 
     save_file(os.path.join(params.odir, '{}.segmented.{}'.format(params.filename[:-4], params.output_fmt)), 
               params.pc.loc[~params.pc.buffer], 
-              additional_fields=['label', 'nz', 'pTerrain', 'pLeaf', 'pCWD', 'pWood'])
+              additional_fields=['n_z', 'label', 'pTerrain', 'pLeaf', 'pCWD', 'pWood'] + params.additional_headers)
 
     params.sem_seg_total_time = time.time() - params.sem_seg_start_time
     if not params.keep_npy: [os.unlink(f) for f in test_dataset.filenames]

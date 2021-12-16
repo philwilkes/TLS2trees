@@ -11,8 +11,6 @@ from sklearn.cluster import DBSCAN
 from scipy.spatial import ConvexHull
 import networkx as nx
 
-from pandarallel import pandarallel
-
 from fsct.tools import *
 from fsct.fit_cylinders import RANSAC_helper
 

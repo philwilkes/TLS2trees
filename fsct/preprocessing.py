@@ -37,8 +37,9 @@ def Preprocessing(params):
     params = make_folder_structure(params)
 
     # read in pc
-    params.pc = load_file(filename=params.point_cloud,
-                          verbose=params.verbose)
+    params.pc, params.additional_headers = load_file(filename=params.point_cloud,
+                                                     additional_headers=True,
+                                                     verbose=params.verbose)
 
     # compute plot centre, global shift and bounding box
     params.plot_centre = compute_plot_centre(params.pc)

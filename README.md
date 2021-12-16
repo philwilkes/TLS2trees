@@ -26,7 +26,7 @@ optional arguments:
   --verbose             print stuff
   ```
   
-Followig classification an instance segmenation can be run to seperate individual trees with:
+Following classification an instance segmenation can be run to seperate individual trees with:
 
 `python points2trees.py -i . --odir ../clouds/ --verbose --n-prcs 10 --add-leaves`
 

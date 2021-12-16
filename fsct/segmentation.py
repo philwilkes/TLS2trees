@@ -11,8 +11,6 @@ from sklearn.cluster import DBSCAN
 from scipy.spatial import ConvexHull
 import networkx as nx
 
-from pandarallel import pandarallel
-
 from fsct.tools import *
 from fsct.fit_cylinders import RANSAC_helper
 
@@ -36,11 +34,13 @@ def Segmentation(params):
     
     # extract stems points and slice slice
     stems = params.pc.loc[(~params.pc.buffer) & (params.pc.label == params.stem_class)]
-    
+
+    if 'nz' in stems.columns: stems.rename(columns={'nz':'n_z'}, inplace=True)
+ 
     # slice stems
     slice_thickness = .1
     stems.loc[:, 'slice'] = (stems.z // slice_thickness).astype(int) * slice_thickness
-    stems.loc[:, 'n_slice'] = (stems.nz // slice_thickness).astype(int)
+    stems.loc[:, 'n_slice'] = (stems.n_z // slice_thickness).astype(int)
     
     # cluster within height slices
     stems.loc[:, 'clstr'] = -1

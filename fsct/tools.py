@@ -137,48 +137,39 @@ def compute_bbox(pc):
     bbox_max = {k + 'max':v for k, v in bbox_max.items()}
     return dict2class({**bbox_min, **bbox_max})
     
-def load_file(filename, 
-              plot_centre=None, plot_radius=0, plot_radius_buffer=0, 
-              additional_fields=[], verbose=False):
+def load_file(filename, additional_headers=False, verbose=False):
     
     file_extension = os.path.splitext(filename)[1]
-    headers = ['x', 'y', 'z'] + additional_fields
+    headers = ['x', 'y', 'z']
 
     if file_extension == '.las' or file_extension == '.laz':
         inFile = laspy.read(filename)
         pc = np.vstack((inFile.x, inFile.y, inFile.z))
-        for header in additional_fields:
-            if header in list(inFile.point_format.dimension_names):
-                pc = np.vstack((pc, getattr(inFile, header)))
-            else:
-                headers.drop(header)
-        pc = pd.DataFrame(data=pc, columns=headers)
+        #for header in additional_fields:
+        #    if header in list(inFile.point_format.dimension_names):
+        #        pc = np.vstack((pc, getattr(inFile, header)))
+        #    else:
+        #        headers.drop(header)
+        pc = pd.DataFrame(data=pc, columns=['x', 'y', 'z'])
 
     elif file_extension == '.ply':
         pc = ply_io.read_ply(filename)
-        pc = pc[headers]
+        #pc = pc[headers]
         
     elif file_extension == '.pcd':
         pc = pcd_io.read_pcd(filename)
-        pc = pc[headers]
+        #pc = pc[headers]
         
     else:
         raise Exception('point cloud format not recognised' + filename)
 
     original_num_points = len(pc)
     
-    if len(pc) > 0: # clip round plot
-        if plot_radius > 0:
-            if plot_centre is None:
-                plot_centre = compute_plot_centre(pc)
-
-            distances = np.linalg.norm(pc[['x', 'y']].values - plot_centre, axis=1)
-            keep_points = distances < plot_radius + plot_radius_buffer
-            pc = pc.loc[keep_points]
-    
     if verbose: print(f'read in {filename} with {len(pc)} points')
-    
-    return pc
+   
+    if additional_headers:
+        return pc, [c for c in pc.columns if c not in ['x', 'y', 'z']]
+    else: return pc
 
 
 def save_file(filename, pointcloud, additional_fields=[], verbose=False):
@@ -282,11 +273,11 @@ def make_dtm(params):
                                                          lambda z: np.nanmedian(z), size=size).flatten()
         size += 2
 
-    ground_arr.to_csv(os.path.join(params.odir, 'dem.csv'), index=False)
+    ground_arr[['xx', 'yy', 'ZZ']].to_csv(os.path.join(params.odir, f'{params.basename}.dem.csv'), index=False)
 
     # apply to all points   
     MAP = ground_arr.set_index('VX').ZZ.to_dict()
-    params.pc.loc[:, 'nz'] = params.pc.z - params.pc.VX.map(MAP)  
+    params.pc.loc[:, 'n_z'] = params.pc.z - params.pc.VX.map(MAP)  
     
     return params
 

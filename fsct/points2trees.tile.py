@@ -11,25 +11,28 @@ import pandas as pd
 from tqdm.auto import tqdm
 
 from sklearn.neighbors import NearestNeighbors
+from sklearn.cluster import DBSCAN
+from scipy.spatial import ConvexHull
 import networkx as nx
 
 from fsct.tools import *
+from fsct.fit_cylinders import RANSAC_helper
 
 pd.options.mode.chained_assignment = None
 
-def generate_path(samples, stem_skeleton):
+def generate_path(samples, skeleton):
     
-    if not isinstance(stem_skeleton.dbh_node.dtype, bool):
-        stem_skeleton.dbh_node = stem_skeleton.dbh_node.astype(bool)
+    if not isinstance(skeleton.dbh_node.dtype, bool):
+        skeleton.dbh_node = skeleton.dbh_node.astype(bool)
 
-    if len(stem_skeleton.loc[stem_skeleton.dbh_node == 1]) > 0:
+    if len(skeleton.loc[skeleton.dbh_node == 1]) > 0:
         ### build graph ###
         # compute nearest neighbours for each vertex in cluster convex hull
         num_neighbours = 50
         nn = NearestNeighbors(n_neighbors=num_neighbours).fit(samples[['x', 'y', 'z']])
         distances, indices = nn.kneighbors()    
-        from_to_all = pd.DataFrame(np.vstack([np.repeat(samples.t_clstr.values, num_neighbours), 
-                                          samples.iloc[indices.ravel()].t_clstr.values, 
+        from_to_all = pd.DataFrame(np.vstack([np.repeat(samples.clstr.values, num_neighbours), 
+                                          samples.iloc[indices.ravel()].clstr.values, 
                                           distances.ravel()]).T, 
                                    columns=['source', 'target', 'length'])
 
@@ -41,7 +44,7 @@ def generate_path(samples, stem_skeleton):
         edges = edges.loc[edges.length <= .2]
         #edges = edges.loc[edges.length <= .5]
         
-        stems_in_tile = list(stem_skeleton.loc[(stem_skeleton.dbh_node)].t_clstr)
+        stems_in_tile = list(skeleton.loc[(skeleton.dbh_node)].clstr)
 
         # compute graph
         G = nx.from_pandas_edgelist(edges, edge_attr=['length'])
@@ -59,10 +62,21 @@ def generate_path(samples, stem_skeleton):
     else: 
         return pd.DataFrame(columns=['index', 'distance', 'base'])
 
+    
 def unique_cluster_id(clstr):
     
     gen_tclstr = lambda: ''.join(np.random.choice(list(string.ascii_letters), size=8))
     return {c:gen_tclstr() for c in clstr}
+
+
+def cube(pc):
+    
+    if len(pc) > 5:
+        vertices = ConvexHull(pc[['x', 'y', 'z']]).vertices
+        idx = np.random.choice(vertices, size=len(vertices), replace=False)
+        return pc.loc[pc.index[idx]]
+    else:
+        return pc 
     
 
 if __name__ == '__main__':
@@ -74,33 +88,36 @@ if __name__ == '__main__':
     parser.add_argument('--n-tiles', default=3, type=int, help='enlarges the number of tiles i.e. 3x3 or tiles or 5 x 5 tiles')
     parser.add_argument('--n-prcs', default=5, type=int, help='number of cores')
     parser.add_argument('--add-leaves', action='store_true', help='add leaf points')
+    parser.add_argument('--pandarallel', action='store_true', help='use pandarallel')
     parser.add_argument('--verbose', action='store_true', help='print something')
     params = parser.parse_args()
 
     if params.tile == '':
-        raise Exception('specify --tile')    
+        raise Exception('specify --tile')  
+        
+    if params.pandarallel:
+        try:
+            from pandarallel import pandarallel
+            pandarallel.initialize(progress_bar=True if params.verbose else False)
+        except:
+            print('--- pandarallel not installed ---')
+            params.pandarallel = False
 
-    params.not_base = 'XXXXXXXX'  
+    params.not_base = -1  
+    xyz = ['x', 'y', 'z'] # shorthand
 
     params.dir, params.fn = os.path.split(params.tile)
     params.n = int(params.fn.split('.')[0])
     params.tmp = glob.glob(os.path.join(params.dir, f'{params.n:03}.*.tmp'))[0]
 
-    # all_samples are the convex hull points
-    params.all_samples = ply_io.read_ply(glob.glob(os.path.join(params.tmp, f'{params.n:03}*samples*'))[0])
-    params.all_samples.loc[:, 'buffer'] = False
-    params.all_samples.loc[:, 'fn'] = params.n
-    t_clstr = unique_cluster_id(params.all_samples.clstr)
-    params.all_samples.loc[:, 't_clstr'] = params.all_samples.clstr.map(t_clstr)
+    params.pc = ply_io.read_ply(params.tile)
+    params.pc.loc[:, 'buffer'] = False
+    params.pc.loc[:, 'fn'] = params.n
 
-    # stem skeleton are the stem points (prob coild be read from XXX*.segmented.ply)
-    params.all_skeleton = ply_io.read_ply(glob.glob(os.path.join(params.tmp, f'{params.n:03}*stem_skeleton*'))[0])
-    params.all_skeleton.loc[:, 'buffer'] = False
-    params.all_skeleton.loc[:, 'fn'] = params.n
-    params.all_skeleton.loc[:, 't_clstr'] = params.all_skeleton.clstr.map(t_clstr)
-    # variable contains the ids of all stems in the focus tile, 
-    # this is used later when saving just the focus trees
-    params.in_tile_stem_nodes = params.all_skeleton.loc[params.all_skeleton.dbh_node == 1].t_clstr
+    bbox = {}
+    bbox['xmin'], bbox['xmax'] = params.pc.x.min(), params.pc.x.max()
+    bbox['ymin'], bbox['ymax'] = params.pc.y.min(), params.pc.y.max()
+    bbox = dict2class(bbox)
 
     # neighbouring tiles to process
     params.ti = pd.read_csv(params.tindex, 
@@ -115,77 +132,126 @@ if __name__ == '__main__':
                      total=len(buffer_tiles),
                      desc='read in skeleton and convex hull', 
                      disable=False if params.verbose else True):
-        try:
-            b_tile = glob.glob(os.path.join(params.dir, f'{t:03}*', f'{t:03}*samples*'))[0]
-            tmp = ply_io.read_ply(b_tile)
-            tmp.loc[:, 'buffer'] = True
-            tmp.loc[:, 'fn'] = t
 
-            # generate unique cluster name
-            t_clstr = unique_cluster_id(tmp.clstr)
-            tmp.loc[:, 't_clstr'] = tmp.clstr.map(t_clstr) # and map
+        b_tile = glob.glob(os.path.join(params.dir, f'{t:03}*.ply'))[0]
+        tmp = ply_io.read_ply(b_tile)
+        tmp = tmp.loc[(tmp.x.between(bbox.xmin - 10, bbox.xmax + 10)) & 
+                      (tmp.y.between(bbox.ymin - 10, bbox.ymax + 10))]
+        if len(tmp) == 0: continue
+        tmp.loc[:, 'buffer'] = True
+        tmp.loc[:, 'fn'] = t
 
-            # append to all_samples
-            params.all_samples = params.all_samples.append(tmp, ignore_index=True)
+        params.pc = params.pc.append(tmp, ignore_index=True)
+        
+    if 'nz' in params.pc.columns: params.pc.rename(columns={'nz':'n_z'}, inplace=True)
 
-            # read in stem points
-            if os.path.isfile(b_tile.replace('samples', 'stem_skeleton')):
-                skel = ply_io.read_ply(b_tile.replace('samples', 'stem_skeleton'))
-                skel.loc[:, 'buffer'] = True
-                skel.loc[:, 'fn'] = t
-                skel.dbh_node = skel.dbh_node.astype(bool)
-                skel.loc[:, 't_clstr'] = skel.clstr.map(t_clstr)
-                params.all_skeleton = params.all_skeleton.append(skel, ignore_index=True)
-        except:
-            t = os.path.join(params.dir, f'{t:03}*', f'{t:03}*samples*')
-            raise Exception(f'tile does not exist: {t}')
+    ### generate skeleton points
+    if params.verbose: print('\n----- skeletonisation started -----')
 
-    # reset indexes
-    params.all_samples.reset_index(inplace=True, drop=True)
-    params.all_skeleton.reset_index(inplace=True, drop=True)
+    # extract stems points and slice slice
+    stem_pc = params.pc.loc[params.pc.label == 3]
 
+    # slice stem_pc
+    slice_thickness = .1
+    stem_pc.loc[:, 'slice'] = (stem_pc.z // slice_thickness).astype(int) * slice_thickness
+    stem_pc.loc[:, 'n_slice'] = (stem_pc.n_z // slice_thickness).astype(int)
+
+    # cluster within height slices
+    stem_pc.loc[:, 'clstr'] = -1
+    label_offset = 0
+
+    for slice_height in tqdm(np.sort(stem_pc.slice.unique()), 
+                             disable=False if params.verbose else True,
+                             desc='slice data vertically and clustering'):
+
+        new_slice = stem_pc.loc[np.isclose(stem_pc['slice'], slice_height)]
+
+        if len(new_slice) > 100:
+            dbscan = DBSCAN(eps=.1, min_samples=20).fit(new_slice[xyz])
+            new_slice.loc[:, 'clstr'] = dbscan.labels_
+            new_slice.loc[new_slice.clstr > -1, 'clstr'] += label_offset
+            stem_pc.loc[new_slice.index, 'clstr'] = new_slice.clstr
+            label_offset = stem_pc.clstr.max() + 1
+    
+    # group skeleton points
+    grouped = stem_pc.loc[stem_pc.clstr != -1].groupby('clstr')
+    if params.verbose: print('fitting convex hulls to clusters')
+    if params.pandarallel:
+        chull = grouped.parallel_apply(cube) # parallel_apply only works witn pd < 1.3
+    else:
+        chull = grouped.apply(cube) # don't think works with Jasmin or parallel_apply only works witn pd < 1.3
+    chull = chull.reset_index(drop=True) 
+    
+    ### identify possible stems ###
+    if params.verbose: print('identifying stems...')
+    skeleton = grouped[xyz + ['n_z', 'n_slice', 'slice']].median().reset_index()
+    skeleton.loc[:, 'dbh_node'] = False
+    
+    dbh_nodes = skeleton.loc[skeleton.n_z.between(1.3, 1.4)].clstr
+    dbh_slice = stem_pc.loc[stem_pc.clstr.isin(dbh_nodes)]
+    
+    if len(dbh_slice) > 0:
+
+        # remove noise from dbh slice
+        nn = NearestNeighbors(n_neighbors=10).fit(dbh_slice[xyz])
+        distances, indices = nn.kneighbors()
+        dbh_slice.loc[:, 'nn'] = distances[:, 1:].mean()
+        dbh_slice = dbh_slice.loc[dbh_slice.nn < .05]
+
+        # run dbscan over dbh_slice
+        dbscan = DBSCAN(eps=.2, min_samples=100).fit(dbh_slice[['x', 'y']])
+        dbh_slice.loc[:, 'clstr_db'] = dbscan.labels_
+        dbh_slice = dbh_slice.loc[dbh_slice.clstr_db > -1]
+
+        if len(dbh_slice) > 10: 
+
+            # ransac cylinder fitting
+            if params.verbose: print('fitting cylinders to potential stems')
+            if params.pandarallel:
+                dbh_cylinder = dbh_slice.groupby('clstr').parallel_apply(RANSAC_helper, 10, 50).to_dict()
+            else:
+                dbh_cylinder = dbh_slice.groupby('clstr').apply(RANSAC_helper, 10, 50).to_dict()
+            dbh_cylinder = pd.DataFrame(dbh_cylinder).T
+            dbh_cylinder.columns = ['radius', 'centre', 'error', 'err_std']
+            dbh_cylinder.loc[:, 'CV'] = dbh_cylinder.err_std / dbh_cylinder.error # CV used to determine cylinrical-ness
+#             dbh_cylinder.to_csv(os.path.join(params.working_dir, f'{params.basename}.stem_attributes.csv'), index=False)
+
+            # identify clusters where cylinder CV <= .75 and label as nodes
+            skeleton.loc[skeleton.clstr.isin(dbh_cylinder.loc[dbh_cylinder.CV <= .75].index.values), 'dbh_node'] = True
+            
+    in_tile_stem_nodes = skeleton.loc[(skeleton.dbh_node) & 
+                                      (skeleton.x.between(bbox.xmin, bbox.xmax)) &
+                                      (skeleton.y.between(bbox.ymin, bbox.ymax))].clstr
+    
     # generates paths through all stem points
     if params.verbose: print('generating graph, this may take a while...')
-    all_paths = generate_path(params.all_samples, params.all_skeleton)
+    all_paths = generate_path(chull, skeleton)
 
     # removes paths that are longer for same clstr
     all_paths = all_paths.sort_values(['index', 'distance'])
     all_paths = all_paths.loc[~all_paths['index'].duplicated()] 
 
     if params.verbose: print('merging skeleton points with graph')
-    stems = pd.merge(params.all_skeleton, all_paths, left_on='t_clstr', right_on='index', how='left')
+    stems = pd.merge(skeleton, all_paths, left_on='clstr', right_on='index', how='left')
 
     # give a unique colour to each tree (helps with visualising)
     stems.drop(columns=[c for c in stems.columns if c.startswith('red') or 
                                                     c.startswith('green') or 
                                                     c.startswith('blue')], inplace=True)
     unique_stems = stems.base.unique()
-    params.RGB = pd.DataFrame(data=np.vstack([unique_stems, 
-                                              np.random.randint(0, 255, size=(3, len(unique_stems)))]).T, 
-                              columns=['base', 'red', 'green', 'blue'])
-    params.RGB.loc[params.RGB.base == params.not_base, :] = [np.nan, 211, 211, 211] # color unassigned points grey
-    stems = pd.merge(stems, params.RGB, on='base', how='right')
+    RGB = pd.DataFrame(data=np.vstack([unique_stems, 
+                                       np.random.randint(0, 255, size=(3, len(unique_stems)))]).T, 
+                       columns=['base', 'red', 'green', 'blue'])
+    RGB.loc[RGB.base == params.not_base, :] = [np.nan, 211, 211, 211] # color unassigned points grey
+    stems = pd.merge(stems, RGB, on='base', how='right')
 
     # read in all "stems" tiles and assign all stem points to a tree
-    trees = pd.DataFrame(columns=['x', 'y', 'z', 'clstr', 'base'])
-
-    for i, t in tqdm(enumerate(list(buffer_tiles) + [params.n]), 
-                     total=len(list(buffer_tiles) + [params.n]),
-                     desc='read in skeleton and convex hull', 
-                     disable=False if params.verbose else True):
-
-        fn = glob.glob(os.path.join(params.dir, f'{t:03}*', f'{t:03}.downsample.stems.ply'))[0]
-        ply = ply_io.read_ply(fn)
-        N = int(os.path.split(fn)[1].split('.')[0])
-        # knowing the tile here is important as the global clstr is
-        # not stored in each tile
-        PLY = pd.merge(ply, stems.loc[stems.fn == N][['clstr', 'base', 'red', 'green', 'blue']], on='clstr')
-        trees = trees.append(PLY, ignore_index=True)
+    trees = pd.merge(stem_pc, stems[['clstr', 'base', 'red', 'green', 'blue']], on='clstr')
 
     # write out all trees
     params.base_I, I = {}, 0
-    for i, b in tqdm(enumerate(params.in_tile_stem_nodes), 
-                     total=len(params.in_tile_stem_nodes), 
+    for i, b in tqdm(enumerate(in_tile_stem_nodes), 
+                     total=len(in_tile_stem_nodes), 
                      desc='writing stems to file', 
                      disable=False if params.verbose else True):
         if b == params.not_base: continue
@@ -195,42 +261,26 @@ if __name__ == '__main__':
 
     if params.add_leaves:
         
-        stems.base = [params.not_base if isinstance(b, float) else b for b in stems.base]
-
-        # link stem number to t_clstr
-        stem2tlsctr = stems[['t_clstr', 'base']].loc[stems.base != params.not_base].set_index('t_clstr').to_dict()['base']
-        params.all_samples.loc[:, 'stem'] = params.all_samples.t_clstr.map(stem2tlsctr)
+        if params.verbose: print('adding leaves to stems, this may take a while...')
         
-        # read in leaf point clouds and attribute to trees
-        lvs = pd.DataFrame()
-        for i, t in tqdm(enumerate(list(buffer_tiles) + [params.n]),
-                         total=len(list(buffer_tiles) + [params.n]),
-                         desc='add leaves', 
-                         disable=False if params.verbose else True):
+        # link stem number to clstr
+        stem2tlsctr = stems[['clstr', 'base']].loc[stems.base != params.not_base].set_index('clstr').to_dict()['base']
+        chull.loc[:, 'stem'] = chull.clstr.map(stem2tlsctr)
+        chull = chull.loc[[False if np.isnan(s) else True for s in chull.stem]]
+        chull.loc[:, 'label'] = 2
 
-            tmp = ply_io.read_ply(glob.glob(os.path.join(params.dir, f'{t:03}*.segmented.ply'))[0])
-            if 'nz' in tmp.columns: tmp.rename(columns={'nz':'n_z'}, inplace=True)
-            tmp = tmp.loc[(tmp.label == 1) & (tmp.n_z >= 2)]
-            lvs = lvs.append(tmp)
-
-        lvs = lvs.drop(columns=['distance'] if 'distance' in lvs.columns else[])
-
-        # voxelise
+        # process leaf points
+        lvs = params.pc.loc[(params.pc.label == 1) & (params.pc.n_z >= 2)].copy()
         lvs = voxelise(lvs, length=.2)
-        lvs_median = lvs.groupby('VX')[['x', 'y', 'z']].median().reset_index()
+        lvs_median = lvs.groupby('VX')[xyz].median().reset_index()
         lvs_median.loc[:, 'label'] = 1
 
-        # subsample stem pc
-        params.all_samples = params.all_samples.loc[[False if isinstance(x, float) else 
-                                                     True for x in params.all_samples.stem]]
-        params.all_samples.loc[:, 'label'] = 2
-
         # and combine leaves and wood
-        branch_and_leaves = lvs_median.append(params.all_samples[['x', 'y', 'z', 'label', 'stem']])
+        branch_and_leaves = lvs_median.append(chull[['x', 'y', 'z', 'label', 'stem']])
         branch_and_leaves.reset_index(inplace=True, drop=True)
 
         # find neighbouring branch and leaf points - used as entry points
-        nn = NearestNeighbors(n_neighbors=2).fit(branch_and_leaves[['x', 'y', 'z']])
+        nn = NearestNeighbors(n_neighbors=2).fit(branch_and_leaves[xyz])
         distances, indices = nn.kneighbors()   
         closest_point_to_leaf = indices[:len(lvs_median), :].flatten() # only leaf points
         idx = np.isin(closest_point_to_leaf, branch_and_leaves.loc[branch_and_leaves.label == 2].index)
@@ -240,9 +290,9 @@ if __name__ == '__main__':
         idx = np.hstack([branch_and_leaves.iloc[:len(lvs_median)].index.values, close_branch_points])
         bal = branch_and_leaves.loc[branch_and_leaves.index.isin(np.unique(idx))]
 
-        # compute nearest neighbours for each vertex in cluster convex hull
+        # compute nearest neighbours for each vertex
         num_neighbours = 50
-        nn = NearestNeighbors(n_neighbors=num_neighbours).fit(bal[['x', 'y', 'z']])
+        nn = NearestNeighbors(n_neighbors=num_neighbours).fit(bal[xyz])
         distances, indices = nn.kneighbors()    
 
         from_to_all = pd.DataFrame(np.vstack([np.repeat(bal.index.values, num_neighbours), 
@@ -286,22 +336,19 @@ if __name__ == '__main__':
         lvs = pd.merge(lvs, paths[['VX', 'stem_', 'distance']], on='VX')
 
         # colour the same as stem
-        lvs = pd.merge(lvs, params.RGB, left_on='stem_', right_on='base', )
+        lvs = pd.merge(lvs, RGB, left_on='stem_', right_on='base', )
         lvs[['red', 'green', 'blue']] = (lvs[['red', 'green', 'blue']] * 1.2).astype(int)
         lvs.loc[lvs.red > 255, 'red'] = 255
         lvs.loc[lvs.blue > 255, 'blue'] = 255
         lvs.loc[lvs.green > 255, 'green'] = 255
 
         # and save
-        for lv in lvs.loc[lvs.base.isin(params.in_tile_stem_nodes)].base.unique():
+        for lv in lvs.loc[lvs.base.isin(in_tile_stem_nodes)].base.unique():
 
             I = params.base_I[lv]
 
-            if os.path.isfile(os.path.join(params.odir, f'{params.n:03}_T{I}.leafon.ply')):
-                stem = ply_io.read_ply(os.path.join(params.odir, f'{params.n:03}_T{I}.leafon.ply'))
-            else:
-                stem = ply_io.read_ply(os.path.join(params.odir, f'{params.n:03}_T{I}.leafoff.ply'))
-                stem.loc[:, 'wood'] = 1
+            stem = ply_io.read_ply(os.path.join(params.odir, f'{params.n:03}_T{I}.leafoff.ply'))
+            stem.loc[:, 'wood'] = 1
 
             l2a = lvs.loc[lvs.base == lv]
             l2a.loc[:, 'wood'] = 0

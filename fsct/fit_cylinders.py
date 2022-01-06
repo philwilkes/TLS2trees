@@ -83,10 +83,10 @@ def RANSACcylinderFitting3(xyz, iterations=50, N=100):
                 error = np.linalg.norm(allInliers[['x', 'y']] - centre, axis=1) / radius
 
                 if error.mean() < bestErr:
-                    centre = np.hstack([sample.x.mean(), centre])
-                    centre = pca.inverse_transform(centre)
+                    Centre = np.hstack([sample.x.mean(), centre])
+                    Centre = pca.inverse_transform(Centre)
 
-                    bestFit = [radius, centre]
+                    bestFit = [radius, Centre]
                     bestErr = error.mean()
                     bestErrStd = error.std()  
     
@@ -97,7 +97,7 @@ def RANSACcylinderFitting3(xyz, iterations=50, N=100):
         # usually caused by low number of ransac iterations
         return np.nan, xyz[['x', 'y', 'z']].mean(axis=0).values, np.inf, np.inf
 
-    return [radius, centre, bestErr, bestErrStd]
+    return [radius, Centre, bestErr, bestErrStd]
 
 def NotRANSAC(xyz):
     

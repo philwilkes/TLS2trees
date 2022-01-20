@@ -345,7 +345,7 @@ if __name__ == '__main__':
 
         # linking index to VX number
         index2VX = branch_and_leaves.loc[branch_and_leaves.label == 1]['VX'].to_dict()
-        paths.loc[:, 'VX'] = paths['index'].map(index2VX)
+        paths.loc[:, 'VX'] = paths['s_index'].map(index2VX)
 
         # linking VX to stem
         lvs = pd.merge(lvs, paths[['VX', 'stem_', 'distance']], on='VX')

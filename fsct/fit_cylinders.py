@@ -1,8 +1,11 @@
 from sklearn.decomposition import PCA 
 from scipy import optimize
 from scipy.spatial.transform import Rotation 
-from matplotlib.patches import Circle
+from scipy.stats import variation
 import numpy as np
+
+from matplotlib.patches import Circle
+import matplotlib.pyplot as plt
 
 def other_cylinder_fit2(xyz):
     
@@ -49,55 +52,65 @@ def other_cylinder_fit2(xyz):
     return np.abs(rad), centre
 
 
-def RANSACcylinderFitting3(xyz, iterations=50, N=100):
+def RANSACcylinderFitting3(xyz_, ax, iterations=50, N=100, plot=False):
     
-    bestFit = None
-    bestErr, bestErrStd = np.inf, np.inf
+    if plot:
+        ax = plt.subplot(111)
     
-    try:
-        for i in range(iterations):
-
-            idx = np.random.choice(xyz.index, 
-                                   size=min(max(10, int(len(xyz) / 10)), N) * 2,
-                                   replace=False)
-            sample = xyz.loc[idx][['x', 'y', 'z']].copy()
-            pca = PCA(n_components=3, svd_solver='auto').fit(sample)
-            sample[['x', 'y', 'z']] = pca.transform(sample)
-
-            maybeInliers = sample.loc[idx[:int(len(idx) / 2)]].copy()
-            possibleInliers = sample.loc[~sample.index.isin(maybeInliers.index)].copy()
-
-            radius, centre = other_cylinder_fit2(maybeInliers)
-            if not np.all(np.isclose(centre, 0, atol=radius*1.05)): continue
-            
-            error = np.abs(np.linalg.norm(possibleInliers[['x', 'y']] - centre, axis=1)) - radius
-            alsoInliers = possibleInliers.loc[error < radius * .1] # 10% of radius is prob quite large
-
-            # if 10% of potential inliers are actual inliers
-            if len(alsoInliers) > len(possibleInliers) * .1:
-                
-                allInliers = maybeInliers.append(alsoInliers)
-                radius, centre = other_cylinder_fit2(allInliers)
-                if not np.all(np.isclose(centre, 0, atol=radius*1.05)): continue
-                
-                error = np.linalg.norm(allInliers[['x', 'y']] - centre, axis=1) / radius
-
-                if error.mean() < bestErr:
-                    Centre = np.hstack([sample.x.mean(), centre])
-                    Centre = pca.inverse_transform(Centre)
-
-                    bestFit = [radius, Centre]
-                    bestErr = error.mean()
-                    bestErrStd = error.std()  
+    bestFit, bestErr = None, np.inf
     
-    except:
-        return np.nan, xyz[['x', 'y', 'z']].mean(axis=0).values, np.inf, np.inf
+#     try:
+    for i in range(iterations):
+
+        xyz = xyz_.copy()
+        
+        sample = xyz.sample(n=min(max(10, int(len(xyz) / 10)), N))        
+
+        pca = PCA(n_components=3, svd_solver='auto').fit(sample[['x', 'y', 'z']])
+        sample[['x', 'y', 'z']] = pca.transform(sample[['x', 'y', 'z']])
+
+        xyz[['x', 'y', 'z']] = pca.transform(xyz[['x', 'y', 'z']])
+        xyz = xyz.loc[~xyz.index.isin(sample.index)]
+
+#         xyz.plot.scatter('x', 'z', ax=ax, c=['r', 'g', 'b'][i])
+
+        radius, centre = other_cylinder_fit2(sample)
+        if not np.all(np.isclose(centre, 0, atol=radius*1.05)): continue
+
+        xyz.loc[:, 'error'] = np.abs(np.linalg.norm(xyz[['x', 'y']] - centre, axis=1)) / radius
+        alsoInliers = xyz.loc[xyz.error.between(.9, 1.1)] # 10% of radius is prob quite large
+
+        if variation(alsoInliers.error) < bestErr and len(alsoInliers) > len(xyz) * .1:
+
+            # for testing uncomment
+            c = Circle(centre, radius=radius, facecolor='none', edgecolor='g')
+
+            Centre = np.hstack([centre, sample.z.mean()])
+            Centre = pca.inverse_transform(Centre)
+
+            bestFit = [radius, centre, pca, c, alsoInliers]
+            bestErr = variation(alsoInliers.error)
+
+#     except:
+#         return np.nan, xyz[['x', 'y', 'z']].mean(axis=0).values, np.inf, len(xyz_)
 
     if bestFit == None: 
         # usually caused by low number of ransac iterations
-        return np.nan, xyz[['x', 'y', 'z']].mean(axis=0).values, np.inf, np.inf
+        return np.nan, xyz[['x', 'y', 'z']].mean(axis=0).values, np.inf, len(xyz_)
+    
+    # for testing uncomment
+    if plot:
+        xyzt = bestFit[2].transform(xyz_[['x', 'y', 'z']]) 
+        ax.scatter(xyzt[:, 0], xyzt[:, 1], s=1, c='grey')
 
-    return [radius, Centre, bestErr, bestErrStd]
+        allInliers = bestFit[4]
+        cbar = ax.scatter(allInliers.x, allInliers.y, s=10, c=allInliers.error)
+        plt.colorbar(cbar)
+
+        ax.scatter(bestFit[1][0], bestFit[1][1], marker='+', s=100, c='r')
+        ax.add_patch(bestFit[3])
+
+    return [radius, Centre, bestErr, len(xyz_)]
 
 def NotRANSAC(xyz):
     
@@ -117,19 +130,19 @@ def NotRANSAC(xyz):
     except:
         radius, centre = np.nan, xyz[['x', 'y', 'z']].mean(axis=0).values
     
-    return [radius, centre, np.nan, np.nan]
+    return [radius, centre, np.inf, len(xyz)]
 
-def RANSAC_helper(xyz, ransac_iterations, sample):
+def RANSAC_helper(xyz, ransac_iterations, sample, plot=False):
 
 #     try:
         if len(xyz) == 0: # don't think this is required but....
-            cylinder = [np.nan, np.array([np.inf, np.inf, np.inf]), np.inf, np.inf]
+            cylinder = [np.nan, np.array([np.inf, np.inf, np.inf]), np.inf, len(xyz)]
         elif len(xyz) < 10:
-            cylinder = [np.nan, xyz[['x', 'y', 'z']].mean(axis=0).values, np.inf, np.inf]
+            cylinder = [np.nan, xyz[['x', 'y', 'z']].mean(axis=0).values, np.inf, len(xyz)]
         elif len(xyz) < 50:
             cylinder = NotRANSAC(xyz)
         else:
-            cylinder = RANSACcylinderFitting3(xyz, ransac_iterations, sample)
+            cylinder = RANSACcylinderFitting3(xyz, ransac_iterations, sample, plot=plot)
 #             if cylinder == None: # again not sure if this is necessary...
 #                 cylinder = [np.nan, xyz[['x', 'y', 'z']].mean(axis=0)]
                 

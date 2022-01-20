@@ -151,7 +151,10 @@ if __name__ == '__main__':
             params.pc = params.pc.append(tmp, ignore_index=True)
         except:
             path = os.path.join(params.dir, f'{t:03}*.ply')
-            raise Exception(f'tile {path} not available')
+            if params.ignore_missing_tiles:
+                print(f'tile {path} not available')
+            else:
+                raise Exception(f'tile {path} not available')
         
     if 'nz' in params.pc.columns: params.pc.rename(columns={'nz':'n_z'}, inplace=True)
 

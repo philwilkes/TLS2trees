@@ -18,6 +18,8 @@ import networkx as nx
 from fsct.tools import *
 from fsct.fit_cylinders import RANSAC_helper
 
+import warnings
+warnings.filterwarnings('ignore')
 pd.options.mode.chained_assignment = None
 
 def generate_path(samples, skeleton):
@@ -45,6 +47,8 @@ def generate_path(samples, skeleton):
         #edges = edges.loc[edges.length <= .5]
         
         stems_in_tile = list(skeleton.loc[(skeleton.dbh_node)].clstr)
+        # removes isolated dbh points i.e. > edge.length
+        stems_in_tile = [s for s in stems_in_tile if s in edges.source.values] 
 
         # compute graph
         G = nx.from_pandas_edgelist(edges, edge_attr=['length'])
@@ -87,6 +91,8 @@ if __name__ == '__main__':
     parser.add_argument('--tindex', type=str, required=True, help='path to tile index')
     parser.add_argument('--n-tiles', default=3, type=int, help='enlarges the number of tiles i.e. 3x3 or tiles or 5 x 5 tiles')
     parser.add_argument('--n-prcs', default=5, type=int, help='number of cores')
+    parser.add_argument('--slice-height', default=1.4, type=float, help='slice height for identifying stems')
+    parser.add_argument('--slice-thickness', default=.2, type=float, help='slice thickness for identifying stems')
     parser.add_argument('--add-leaves', action='store_true', help='add leaf points')
     parser.add_argument('--pandarallel', action='store_true', help='use pandarallel')
     parser.add_argument('--verbose', action='store_true', help='print something')
@@ -108,7 +114,7 @@ if __name__ == '__main__':
 
     params.dir, params.fn = os.path.split(params.tile)
     params.n = int(params.fn.split('.')[0])
-    params.tmp = glob.glob(os.path.join(params.dir, f'{params.n:03}.*.tmp'))[0]
+#     params.tmp = glob.glob(os.path.join(params.dir, f'{params.n:03}.*.tmp'))[0]
 
     params.pc = ply_io.read_ply(params.tile)
     params.pc.loc[:, 'buffer'] = False
@@ -130,18 +136,22 @@ if __name__ == '__main__':
 
     for i, t in tqdm(enumerate(buffer_tiles),
                      total=len(buffer_tiles),
-                     desc='read in skeleton and convex hull', 
+                     desc='read in neighbouring tiles', 
                      disable=False if params.verbose else True):
 
-        b_tile = glob.glob(os.path.join(params.dir, f'{t:03}*.ply'))[0]
-        tmp = ply_io.read_ply(b_tile)
-        tmp = tmp.loc[(tmp.x.between(bbox.xmin - 10, bbox.xmax + 10)) & 
-                      (tmp.y.between(bbox.ymin - 10, bbox.ymax + 10))]
-        if len(tmp) == 0: continue
-        tmp.loc[:, 'buffer'] = True
-        tmp.loc[:, 'fn'] = t
+        try:
+            b_tile = glob.glob(os.path.join(params.dir, f'{t:03}*.ply'))[0]
+            tmp = ply_io.read_ply(b_tile)
+            tmp = tmp.loc[(tmp.x.between(bbox.xmin - 10, bbox.xmax + 10)) & 
+                          (tmp.y.between(bbox.ymin - 10, bbox.ymax + 10))]
+            if len(tmp) == 0: continue
+            tmp.loc[:, 'buffer'] = True
+            tmp.loc[:, 'fn'] = t
 
-        params.pc = params.pc.append(tmp, ignore_index=True)
+            params.pc = params.pc.append(tmp, ignore_index=True)
+        except:
+            path = os.path.join(params.dir, f'{t:03}*.ply')
+            raise Exception(f'tile {path} not available')
         
     if 'nz' in params.pc.columns: params.pc.rename(columns={'nz':'n_z'}, inplace=True)
 
@@ -152,21 +162,21 @@ if __name__ == '__main__':
     stem_pc = params.pc.loc[params.pc.label == 3]
 
     # slice stem_pc
-    slice_thickness = .1
-    stem_pc.loc[:, 'slice'] = (stem_pc.z // slice_thickness).astype(int) * slice_thickness
-    stem_pc.loc[:, 'n_slice'] = (stem_pc.n_z // slice_thickness).astype(int)
+    stem_pc.loc[:, 'slice'] = (stem_pc.z // params.slice_thickness).astype(int) * params.slice_thickness
+    stem_pc.loc[:, 'n_slice'] = (stem_pc.n_z // params.slice_thickness).astype(int)
+    params.slice_height = int(params.slice_height / params.slice_thickness)
 
     # cluster within height slices
     stem_pc.loc[:, 'clstr'] = -1
     label_offset = 0
 
-    for slice_height in tqdm(np.sort(stem_pc.slice.unique()), 
+    for slice_height in tqdm(np.sort(stem_pc.n_slice.unique()), 
                              disable=False if params.verbose else True,
                              desc='slice data vertically and clustering'):
 
-        new_slice = stem_pc.loc[np.isclose(stem_pc['slice'], slice_height)]
+        new_slice = stem_pc.loc[stem_pc.n_slice == slice_height]
 
-        if len(new_slice) > 100:
+        if len(new_slice) > 200:
             dbscan = DBSCAN(eps=.1, min_samples=20).fit(new_slice[xyz])
             new_slice.loc[:, 'clstr'] = dbscan.labels_
             new_slice.loc[new_slice.clstr > -1, 'clstr'] += label_offset
@@ -186,39 +196,41 @@ if __name__ == '__main__':
     if params.verbose: print('identifying stems...')
     skeleton = grouped[xyz + ['n_z', 'n_slice', 'slice']].median().reset_index()
     skeleton.loc[:, 'dbh_node'] = False
-    
-    dbh_nodes = skeleton.loc[skeleton.n_z.between(1.3, 1.4)].clstr
+
+    dbh_nodes = skeleton.loc[skeleton.n_slice == params.slice_height].clstr
     dbh_slice = stem_pc.loc[stem_pc.clstr.isin(dbh_nodes)]
-    
+
     if len(dbh_slice) > 0:
 
         # remove noise from dbh slice
         nn = NearestNeighbors(n_neighbors=10).fit(dbh_slice[xyz])
         distances, indices = nn.kneighbors()
-        dbh_slice.loc[:, 'nn'] = distances[:, 1:].mean()
-        dbh_slice = dbh_slice.loc[dbh_slice.nn < .05]
+        dbh_slice.loc[:, 'nn'] = distances[:, 1:].mean(axis=1)
+        dbh_slice = dbh_slice.loc[dbh_slice.nn < dbh_slice.nn.quantile(q=.9)]
 
         # run dbscan over dbh_slice
-        dbscan = DBSCAN(eps=.2, min_samples=100).fit(dbh_slice[['x', 'y']])
+        dbscan = DBSCAN(eps=.1, min_samples=75).fit(dbh_slice[['x', 'y']])
         dbh_slice.loc[:, 'clstr_db'] = dbscan.labels_
         dbh_slice = dbh_slice.loc[dbh_slice.clstr_db > -1]
 
         if len(dbh_slice) > 10: 
 
             # ransac cylinder fitting
-            if params.verbose: print('fitting cylinders to potential stems')
+            if params.verbose: print('fitting cylinders to possible stems...')
             if params.pandarallel:
-                dbh_cylinder = dbh_slice.groupby('clstr').parallel_apply(RANSAC_helper, 10, 50).to_dict()
+                dbh_cylinder = dbh_slice.groupby('clstr').parallel_apply(RANSAC_helper, 1000, 20).to_dict()
             else:
-                dbh_cylinder = dbh_slice.groupby('clstr').apply(RANSAC_helper, 10, 50).to_dict()
+                dbh_cylinder = dbh_slice.groupby('clstr').apply(RANSAC_helper, 1000, 10).to_dict()
             dbh_cylinder = pd.DataFrame(dbh_cylinder).T
-            dbh_cylinder.columns = ['radius', 'centre', 'error', 'err_std']
-            dbh_cylinder.loc[:, 'CV'] = dbh_cylinder.err_std / dbh_cylinder.error # CV used to determine cylinrical-ness
-#             dbh_cylinder.to_csv(os.path.join(params.working_dir, f'{params.basename}.stem_attributes.csv'), index=False)
+            dbh_cylinder.columns = ['radius', 'centre', 'CV', 'cnt']
+            dbh_cylinder.loc[:, ['x', 'y', 'z']] = [[*row.centre] for row in dbh_cylinder.itertuples()]
+            dbh_cylinder = dbh_cylinder.drop(columns=['centre']).astype(float)
 
             # identify clusters where cylinder CV <= .75 and label as nodes
-            skeleton.loc[skeleton.clstr.isin(dbh_cylinder.loc[dbh_cylinder.CV <= .75].index.values), 'dbh_node'] = True
-            
+            skeleton.loc[skeleton.clstr.isin(dbh_cylinder.loc[(dbh_cylinder.CV <= .4) &
+                                                              (dbh_cylinder.radius > .05) &
+                                                              (dbh_cylinder.cnt > 200)].index.values), 'dbh_node'] = True
+
     in_tile_stem_nodes = skeleton.loc[(skeleton.dbh_node) & 
                                       (skeleton.x.between(bbox.xmin, bbox.xmax)) &
                                       (skeleton.y.between(bbox.ymin, bbox.ymax))].clstr
@@ -247,6 +259,9 @@ if __name__ == '__main__':
 
     # read in all "stems" tiles and assign all stem points to a tree
     trees = pd.merge(stem_pc, stems[['clstr', 'base', 'red', 'green', 'blue']], on='clstr')
+    trees.loc[:, 'cnt'] = trees.groupby('base').base.transform('count')
+    trees = trees.loc[trees.cnt > 10000]
+    in_tile_stem_nodes = trees.loc[trees.base.isin(in_tile_stem_nodes)].base.unique()
 
     # write out all trees
     params.base_I, I = {}, 0
@@ -319,8 +334,8 @@ if __name__ == '__main__':
 
         # graph to df
         paths = pd.DataFrame(index=distance.keys(), data=distance.values(), columns=['distance'])
-        for p in paths.index: paths.loc[p, 't_index'] = shortest_path[p][0]
-        paths.reset_index(inplace=True)
+        paths = paths.reset_index().rename(columns={'index':'s_index'})
+        paths.loc[:, 't_index'] = paths.s_index.apply(lambda ix: shortest_path[ix][0]) 
         paths = paths.loc[paths.distance > 0]
 
         # linking indexs to stem number

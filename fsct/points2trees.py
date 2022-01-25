@@ -22,7 +22,7 @@ import warnings
 warnings.filterwarnings('ignore')
 pd.options.mode.chained_assignment = None
 
-def generate_path(samples, skeleton):
+def generate_path(samples, skeleton, params):
     
     if not isinstance(skeleton.dbh_node.dtype, bool):
         skeleton.dbh_node = skeleton.dbh_node.astype(bool)
@@ -43,7 +43,7 @@ def generate_path(samples, skeleton):
         # and build edge database where edges with min distance between clusters persist
         edges = from_to_all.groupby(['source', 'target']).length.min().reset_index()
         # remove edges that are likely leaps between trees
-        edges = edges.loc[edges.length <= .2]
+        edges = edges.loc[edges.length <= params.graph_edge_length]
         #edges = edges.loc[edges.length <= .5]
         
         stems_in_tile = list(skeleton.loc[(skeleton.dbh_node)].clstr)
@@ -91,9 +91,16 @@ if __name__ == '__main__':
     parser.add_argument('--tindex', type=str, required=True, help='path to tile index')
     parser.add_argument('--n-tiles', default=3, type=int, help='enlarges the number of tiles i.e. 3x3 or tiles or 5 x 5 tiles')
     parser.add_argument('--n-prcs', default=5, type=int, help='number of cores')
-    parser.add_argument('--slice-height', default=1.4, type=float, help='slice height for identifying stems')
-    parser.add_argument('--slice-thickness', default=.2, type=float, help='slice thickness for identifying stems')
+    parser.add_argument('--slice-thickness', default=.2, type=float, help='slice thickness for constructing graph')
+    parser.add_argument('--find-stems-height', default=1.5, type=float, help='height for identifying stems')    
+    parser.add_argument('--find-stems-thickness', default=.5, type=float, help='thickness of slice used for identifying stems')
+    parser.add_argument('--find-stems-min-radius', default=.025, type=float, help='minimum radius of found stems')
+    parser.add_argument('--find-stems-min-points', default=200, type=int, help='minimum number of points for found stems')
+    parser.add_argument('--graph-edge-length', default=.2, type=float, help='maximum distance used to connect points in graph')
+    parser.add_argument('--min-points-per-tree', default=0, type=int, help='minimum number of points for a identified tree')
     parser.add_argument('--add-leaves', action='store_true', help='add leaf points')
+    parser.add_argument('--add-leaves-voxel-length', default=.2, type=float, help='voxel sixe when add leaves')
+    parser.add_argument('--ignore-missing-tiles', action='store_true', help='ignore missing neighbouring tiles')
     parser.add_argument('--pandarallel', action='store_true', help='use pandarallel')
     parser.add_argument('--verbose', action='store_true', help='print something')
     params = parser.parse_args()
@@ -108,6 +115,11 @@ if __name__ == '__main__':
         except:
             print('--- pandarallel not installed ---')
             params.pandarallel = False
+    
+    if params.verbose:
+        print('---- parameters ----')
+        for k, v in params.__dict__.items():
+            print(f'{k:<35}{v}')
 
     params.not_base = -1  
     xyz = ['x', 'y', 'z'] # shorthand
@@ -167,7 +179,6 @@ if __name__ == '__main__':
     # slice stem_pc
     stem_pc.loc[:, 'slice'] = (stem_pc.z // params.slice_thickness).astype(int) * params.slice_thickness
     stem_pc.loc[:, 'n_slice'] = (stem_pc.n_z // params.slice_thickness).astype(int)
-    params.slice_height = int(params.slice_height / params.slice_thickness)
 
     # cluster within height slices
     stem_pc.loc[:, 'clstr'] = -1
@@ -200,8 +211,11 @@ if __name__ == '__main__':
     skeleton = grouped[xyz + ['n_z', 'n_slice', 'slice']].median().reset_index()
     skeleton.loc[:, 'dbh_node'] = False
 
-    dbh_nodes = skeleton.loc[skeleton.n_slice == params.slice_height].clstr
-    dbh_slice = stem_pc.loc[stem_pc.clstr.isin(dbh_nodes)]
+    # dbh_nodes = skeleton.loc[skeleton.n_slice == params.slice_height].clstr
+    find_stems_min = int(params.find_stems_height // params.slice_thickness) 
+    find_stems_max = int((params.find_stems_height + params.find_stems_thickness) // params.slice_thickness)  + 1
+    dbh_nodes_plus = skeleton.loc[skeleton.n_slice.between(find_stems_min, find_stems_max)].clstr
+    dbh_slice = stem_pc.loc[stem_pc.clstr.isin(dbh_nodes_plus)]
 
     if len(dbh_slice) > 0:
 
@@ -211,28 +225,30 @@ if __name__ == '__main__':
         dbh_slice.loc[:, 'nn'] = distances[:, 1:].mean(axis=1)
         dbh_slice = dbh_slice.loc[dbh_slice.nn < dbh_slice.nn.quantile(q=.9)]
 
-        # run dbscan over dbh_slice
-        dbscan = DBSCAN(eps=.1, min_samples=75).fit(dbh_slice[['x', 'y']])
+        # run dbscan over dbh_slice to find potential stems
+        dbscan = DBSCAN(eps=.2, min_samples=50).fit(dbh_slice[['x', 'y']])
         dbh_slice.loc[:, 'clstr_db'] = dbscan.labels_
         dbh_slice = dbh_slice.loc[dbh_slice.clstr_db > -1]
+        dbh_slice.loc[:, 'cclstr'] = dbh_slice.groupby('clstr_db').clstr.transform('min')
 
         if len(dbh_slice) > 10: 
 
             # ransac cylinder fitting
             if params.verbose: print('fitting cylinders to possible stems...')
             if params.pandarallel:
-                dbh_cylinder = dbh_slice.groupby('clstr').parallel_apply(RANSAC_helper, 1000, 20).to_dict()
+                dbh_cylinder = dbh_slice.groupby('cclstr').parallel_apply(RANSAC_helper, 100, ).to_dict()
             else:
-                dbh_cylinder = dbh_slice.groupby('clstr').apply(RANSAC_helper, 1000, 10).to_dict()
+                dbh_cylinder = dbh_slice.groupby('cclstr').apply(RANSAC_helper, 100, ).to_dict()
             dbh_cylinder = pd.DataFrame(dbh_cylinder).T
             dbh_cylinder.columns = ['radius', 'centre', 'CV', 'cnt']
             dbh_cylinder.loc[:, ['x', 'y', 'z']] = [[*row.centre] for row in dbh_cylinder.itertuples()]
             dbh_cylinder = dbh_cylinder.drop(columns=['centre']).astype(float)
 
             # identify clusters where cylinder CV <= .75 and label as nodes
-            skeleton.loc[skeleton.clstr.isin(dbh_cylinder.loc[(dbh_cylinder.CV <= .4) &
-                                                              (dbh_cylinder.radius > .05) &
-                                                              (dbh_cylinder.cnt > 200)].index.values), 'dbh_node'] = True
+            skeleton.loc[skeleton.clstr.isin(dbh_cylinder.loc[(dbh_cylinder.radius > params.find_stems_min_radius) &
+                                                              (dbh_cylinder.cnt > params.find_stems_min_points) &
+                                                              (dbh_cylinder.CV <= .15)]
+                                             .index.values), 'dbh_node'] = True
 
     in_tile_stem_nodes = skeleton.loc[(skeleton.dbh_node) & 
                                       (skeleton.x.between(bbox.xmin, bbox.xmax)) &
@@ -240,7 +256,7 @@ if __name__ == '__main__':
     
     # generates paths through all stem points
     if params.verbose: print('generating graph, this may take a while...')
-    all_paths = generate_path(chull, skeleton)
+    all_paths = generate_path(chull, skeleton, params)
 
     # removes paths that are longer for same clstr
     all_paths = all_paths.sort_values(['index', 'distance'])
@@ -263,7 +279,7 @@ if __name__ == '__main__':
     # read in all "stems" tiles and assign all stem points to a tree
     trees = pd.merge(stem_pc, stems[['clstr', 'base', 'red', 'green', 'blue']], on='clstr')
     trees.loc[:, 'cnt'] = trees.groupby('base').base.transform('count')
-    trees = trees.loc[trees.cnt > 10000]
+    trees = trees.loc[trees.cnt > params.min_points_per_tree]
     in_tile_stem_nodes = trees.loc[trees.base.isin(in_tile_stem_nodes)].base.unique()
 
     # write out all trees
@@ -284,32 +300,38 @@ if __name__ == '__main__':
         # link stem number to clstr
         stem2tlsctr = stems[['clstr', 'base']].loc[stems.base != params.not_base].set_index('clstr').to_dict()['base']
         chull.loc[:, 'stem'] = chull.clstr.map(stem2tlsctr)
+        unlabelled_wood = chull.loc[[True if np.isnan(s) else False for s in chull.stem]]
         chull = chull.loc[[False if np.isnan(s) else True for s in chull.stem]]
-        chull.loc[:, 'label'] = 2
+        chull.loc[:, 'xlabel'] = 2
 
         # process leaf points
         lvs = params.pc.loc[(params.pc.label == 1) & (params.pc.n_z >= 2)].copy()
-        lvs = voxelise(lvs, length=.2)
+        unlabelled_wood = unlabelled_wood.loc[unlabelled_wood.n_z >= 2][params.pc.columns]
+        lvs = lvs.append(unlabelled_wood, ignore_index=True)
+        lvs.reset_index(inplace=True)
+
+        # voxelise
+        lvs = voxelise(lvs, length=params.add_leaves_voxel_length)
         lvs_median = lvs.groupby('VX')[xyz].median().reset_index()
-        lvs_median.loc[:, 'label'] = 1
+        lvs_median.loc[:, 'xlabel'] = 1
 
         # and combine leaves and wood
-        branch_and_leaves = lvs_median.append(chull[['x', 'y', 'z', 'label', 'stem']])
+        branch_and_leaves = lvs_median.append(chull[['x', 'y', 'z', 'label', 'stem', 'xlabel']])
         branch_and_leaves.reset_index(inplace=True, drop=True)
 
         # find neighbouring branch and leaf points - used as entry points
         nn = NearestNeighbors(n_neighbors=2).fit(branch_and_leaves[xyz])
         distances, indices = nn.kneighbors()   
         closest_point_to_leaf = indices[:len(lvs_median), :].flatten() # only leaf points
-        idx = np.isin(closest_point_to_leaf, branch_and_leaves.loc[branch_and_leaves.label == 2].index)
+        idx = np.isin(closest_point_to_leaf, branch_and_leaves.loc[branch_and_leaves.xlabel == 2].index)
         close_branch_points = closest_point_to_leaf[idx] # points where the branch is closest
 
         # remove all branch points that are not close to leaves
         idx = np.hstack([branch_and_leaves.iloc[:len(lvs_median)].index.values, close_branch_points])
         bal = branch_and_leaves.loc[branch_and_leaves.index.isin(np.unique(idx))]
 
-        # compute nearest neighbours for each vertex
-        num_neighbours = 50
+        # compute nearest neighbours for each vertex in cluster convex hull
+        num_neighbours = 200
         nn = NearestNeighbors(n_neighbors=num_neighbours).fit(bal[xyz])
         distances, indices = nn.kneighbors()    
 
@@ -323,9 +345,9 @@ if __name__ == '__main__':
         # and build edge database where edges with min distance between clusters persist
         edges = from_to_all.groupby(['source', 'target']).length.min().reset_index()
         # remove edges that are likely leaps between trees
-        #         edges = edges.loc[edges.length <= .2]
-        # edges = edges.loc[edges.length <= 1]
-        edges = edges.loc[edges.length <= .5]
+        edges = edges.loc[edges.length <= params.add_leaves_voxel_length * 2]
+#         edges = edges.loc[edges.length <= 1]
+#         edges = edges.loc[edges.length <= .5]
 
         # compute graph
         G = nx.from_pandas_edgelist(edges, edge_attr=['length'])
@@ -338,16 +360,18 @@ if __name__ == '__main__':
         # graph to df
         paths = pd.DataFrame(index=distance.keys(), data=distance.values(), columns=['distance'])
         paths = paths.reset_index().rename(columns={'index':'s_index'})
+        # for p in paths.index: paths.loc[p, 't_index'] = shortest_path[p][0]
         paths.loc[:, 't_index'] = paths.s_index.apply(lambda ix: shortest_path[ix][0]) 
+        # paths.reset_index(inplace=True)
         paths = paths.loc[paths.distance > 0]
 
         # linking indexs to stem number
-        top2stem = branch_and_leaves.loc[branch_and_leaves.label == 2]['stem'].to_dict()
+        top2stem = branch_and_leaves.loc[branch_and_leaves.xlabel == 2]['stem'].to_dict()
         paths.loc[:, 'stem_'] = paths.t_index.map(top2stem)
         #     paths.loc[:, 'stem'] = paths.stem_.map(base2i)
 
         # linking index to VX number
-        index2VX = branch_and_leaves.loc[branch_and_leaves.label == 1]['VX'].to_dict()
+        index2VX = branch_and_leaves.loc[branch_and_leaves.xlabel == 1]['VX'].to_dict()
         paths.loc[:, 'VX'] = paths['s_index'].map(index2VX)
 
         # linking VX to stem
@@ -370,7 +394,7 @@ if __name__ == '__main__':
 
             l2a = lvs.loc[lvs.base == lv]
             l2a.loc[:, 'wood'] = 0
-            stem = stem.append(l2a[['x', 'y', 'z', 'red', 'green', 'blue', 'base', 'wood', 'distance']])
+            stem = stem.append(l2a[['x', 'y', 'z', 'label', 'red', 'green', 'blue', 'base', 'wood', 'distance']])
 
             stem = stem.loc[~stem.duplicated()]
             ply_io.write_ply(os.path.join(params.odir, f'{params.n:03}_T{I}.leafon.ply'), stem)

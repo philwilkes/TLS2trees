@@ -8,7 +8,6 @@ from fsct.other_parameters import other_parameters
 from fsct.tools import dict2class
 from fsct.preprocessing import Preprocessing
 from fsct.inference import SemanticSegmentation
-from fsct.postprocessing import PostProcessing
 from fsct.segmentation import Segmentation
 
 if __name__ == '__main__':
@@ -93,7 +92,7 @@ if __name__ == '__main__':
         params.steps_completed[1] = True
         pickle.dump(params, open(os.path.join(params.odir, f'{params.basename}.params.pickle'), 'wb'))
 
-    if params.step >= 2 and not params.steps_completed[2]:
-        params = Segmentation(params)
-        params.steps_completed[3] = True
-        pickle.dump(params, open(os.path.join(params.odir, f'{params.basename}.params.pickle'), 'wb'))
+#    if params.step >= 2 and not params.steps_completed[2]:
+#        params = Segmentation(params)
+#        params.steps_completed[3] = True
+#        pickle.dump(params, open(os.path.join(params.odir, f'{params.basename}.params.pickle'), 'wb'))

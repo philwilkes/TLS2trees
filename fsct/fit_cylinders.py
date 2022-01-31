@@ -59,7 +59,6 @@ def RANSACcylinderFitting4(xyz_, iterations=50, plot=False):
         
         # prepare sample 
         sample = xyz.sample(n=20)  
-#         if len(sample) < 50: sample = xyz.sample(n=50)
         xyz = xyz.loc[~xyz.index.isin(sample.index)]
         
         x, y, a, b, radius = other_cylinder_fit2(sample, 0, 0, 0, 0, 0)
@@ -73,7 +72,7 @@ def RANSACcylinderFitting4(xyz_, iterations=50, plot=False):
         
         # select points which best fit model from original dataset
         alsoInliers = xyz_.loc[idx].copy()
-        if len(alsoInliers) < len(xyz_) * .1: continue # skip if no enough points chosen
+        if len(alsoInliers) < len(xyz_) * .2: continue # skip if no enough points chosen
         
         # refit model using new params
         x, y, a, b, radius = other_cylinder_fit2(alsoInliers, x, y, a, b, radius)

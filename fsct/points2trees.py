@@ -91,6 +91,7 @@ if __name__ == '__main__':
     parser.add_argument('--tindex', type=str, required=True, help='path to tile index')
     parser.add_argument('--n-tiles', default=3, type=int, help='enlarges the number of tiles i.e. 3x3 or tiles or 5 x 5 tiles')
     parser.add_argument('--n-prcs', default=5, type=int, help='number of cores')
+    parser.add_argument('--overlap', default=False, type=float, help='buffer to crop adjacent tiles')
     parser.add_argument('--slice-thickness', default=.2, type=float, help='slice thickness for constructing graph')
     parser.add_argument('--find-stems-height', default=1.5, type=float, help='height for identifying stems')    
     parser.add_argument('--find-stems-thickness', default=.5, type=float, help='thickness of slice used for identifying stems')
@@ -154,8 +155,9 @@ if __name__ == '__main__':
         try:
             b_tile = glob.glob(os.path.join(params.dir, f'{t:03}*.ply'))[0]
             tmp = ply_io.read_ply(b_tile)
-            tmp = tmp.loc[(tmp.x.between(bbox.xmin - 10, bbox.xmax + 10)) & 
-                          (tmp.y.between(bbox.ymin - 10, bbox.ymax + 10))]
+            if params.overlap:
+                tmp = tmp.loc[(tmp.x.between(bbox.xmin - params.overlap, bbox.xmax + params.overlap)) & 
+                              (tmp.y.between(bbox.ymin - params.overlap, bbox.ymax + params.overlap))]
             if len(tmp) == 0: continue
             tmp.loc[:, 'buffer'] = True
             tmp.loc[:, 'fn'] = t
@@ -277,7 +279,9 @@ if __name__ == '__main__':
     stems = pd.merge(stems, RGB, on='base', how='right')
 
     # read in all "stems" tiles and assign all stem points to a tree
-    trees = pd.merge(stem_pc, stems[['clstr', 'base', 'red', 'green', 'blue']], on='clstr')
+    trees = pd.merge(stem_pc, 
+                     stems[['clstr', 'base', 'red', 'green', 'blue', 'distance']], 
+                     on='clstr')
     trees.loc[:, 'cnt'] = trees.groupby('base').base.transform('count')
     trees = trees.loc[trees.cnt > params.min_points_per_tree]
     in_tile_stem_nodes = trees.loc[trees.base.isin(in_tile_stem_nodes)].base.unique()
@@ -401,4 +405,6 @@ if __name__ == '__main__':
             stem = stem.append(l2a[['x', 'y', 'z', 'label', 'red', 'green', 'blue', 'base', 'wood', 'distance']])
 
             stem = stem.loc[~stem.duplicated()]
-            ply_io.write_ply(os.path.join(params.odir, f'{params.n:03}_T{I}.leafon.ply'), stem)
+            ply_io.write_ply(os.path.join(params.odir, f'{params.n:03}_T{I}.leafon.ply'), 
+                             stem[['x', 'y', 'z', 'red', 'green', 'blue', 
+                                   'label', 'sp', 'base', 'wood', 'distance']])

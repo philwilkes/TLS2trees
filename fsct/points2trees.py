@@ -296,22 +296,26 @@ if __name__ == '__main__':
     if params.add_leaves:
         
         if params.verbose: print('adding leaves to stems, this may take a while...')
-        
+
         # link stem number to clstr
         stem2tlsctr = stems[['clstr', 'base']].loc[stems.base != params.not_base].set_index('clstr').to_dict()['base']
         chull.loc[:, 'stem'] = chull.clstr.map(stem2tlsctr)
+
+        # identify unlabelled woody points to add back to leaves
         unlabelled_wood = chull.loc[[True if np.isnan(s) else False for s in chull.stem]]
+        unlabelled_wood = stem_pc.loc[stem_pc.clstr.isin(unlabelled_wood.clstr.to_list() + [-1])]
+
+        # extract wood points that are attributed to a base
         chull = chull.loc[[False if np.isnan(s) else True for s in chull.stem]]
         chull.loc[:, 'xlabel'] = 2
 
         # process leaf points
         lvs = params.pc.loc[(params.pc.label == 1) & (params.pc.n_z >= 2)].copy()
-        unlabelled_wood = unlabelled_wood.loc[unlabelled_wood.n_z >= 2][params.pc.columns]
         lvs = lvs.append(unlabelled_wood, ignore_index=True)
         lvs.reset_index(inplace=True)
 
         # voxelise
-        lvs = voxelise(lvs, length=params.add_leaves_voxel_length)
+        lvs = voxelise(lvs, length=.5)
         lvs_median = lvs.groupby('VX')[xyz].median().reset_index()
         lvs_median.loc[:, 'xlabel'] = 1
 

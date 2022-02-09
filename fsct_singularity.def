@@ -1,0 +1,45 @@
+# Start from NVIDIA CUDA container (Ubuntu 20.04)
+Bootstrap: docker
+From: nvcr.io/nvidia/cuda:11.3.1-cudnn8-runtime-ubuntu20.04
+
+%files
+	requirements.txt /tmp/requirements.txt
+	fsct /opt/fsct	
+
+%environment
+	export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda-11.3/lib:/usr/local/cuda-11.3/lib64:/usr/local/cuda/compat
+	export PYTHONPATH=/opt/:$PYTHONPATH
+
+%post
+	# Set as non-interactve
+	export DEBIAN_FRONTEND=noninteractive
+
+	# Install some standard packages, including compilers
+	apt-get update && apt-get install -y  \
+	    apt-utils git curl vim unzip wget \
+	    build-essential 
+	
+	# Install pip
+	apt-get install -y python3-pip
+
+	# Install cuda compatability library
+	apt-get install -y cuda-compat-11-3
+
+	# Create symlink for libcusolver, needed for tensorflow
+	cd /usr/local/cuda-11.3/lib64/ && \
+		ln -s libcusolver.so.11 libcusolver.so.10 && \
+		cd -
+
+	# Pip install required libraries
+	pip install -r /tmp/requirements.txt
+	rm /tmp/requirements.txt
+
+%runscript
+	# Run the main script for FSCT
+	python3 /opt/fsct/run.py
+
+%labels
+	Author neodaas-ai@pml.ac.uk
+
+%help
+	Container for FSCT code

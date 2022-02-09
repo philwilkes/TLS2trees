@@ -30,3 +30,10 @@ Following classification an instance segmenation can be run to seperate individu
 
 `python points2trees.py -i . --odir ../clouds/ --verbose --n-prcs 10 --add-leaves`
 
+## Singularity
+
+To build a singularity container with all the libraries installed use:
+```
+sudo singularity build /tmp/fsct.sif fsct_singularity.def
+```
+

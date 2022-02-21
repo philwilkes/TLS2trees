@@ -15,7 +15,6 @@ import string
 import struct
 from scipy import ndimage
 
-import laspy
 from fsct.io import ply_io, pcd_io
 
 class dict2class:
@@ -143,6 +142,9 @@ def load_file(filename, additional_headers=False, verbose=False):
     headers = ['x', 'y', 'z']
 
     if file_extension == '.las' or file_extension == '.laz':
+
+        import laspy
+
         inFile = laspy.read(filename)
         pc = np.vstack((inFile.x, inFile.y, inFile.z))
         #for header in additional_fields:

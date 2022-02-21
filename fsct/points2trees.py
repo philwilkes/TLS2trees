@@ -100,7 +100,7 @@ if __name__ == '__main__':
     parser.add_argument('--graph-edge-length', default=.2, type=float, help='maximum distance used to connect points in graph')
     parser.add_argument('--min-points-per-tree', default=0, type=int, help='minimum number of points for a identified tree')
     parser.add_argument('--add-leaves', action='store_true', help='add leaf points')
-    parser.add_argument('--add-leaves-voxel-length', default=.2, type=float, help='voxel sixe when add leaves')
+    parser.add_argument('--add-leaves-voxel-length', default=.5, type=float, help='voxel sixe when add leaves')
     parser.add_argument('--ignore-missing-tiles', action='store_true', help='ignore missing neighbouring tiles')
     parser.add_argument('--pandarallel', action='store_true', help='use pandarallel')
     parser.add_argument('--verbose', action='store_true', help='print something')
@@ -293,7 +293,8 @@ if __name__ == '__main__':
                      desc='writing stems to file', 
                      disable=False if params.verbose else True):
         if b == params.not_base: continue
-        ply_io.write_ply(os.path.join(params.odir, f'{params.n:03}_T{I}.leafoff.ply'), trees.loc[trees.base == b])
+        ply_io.write_ply(os.path.join(params.odir, f'{params.n:03}_T{I}.leafoff.ply'), 
+                         trees.loc[trees.base == b]['x', 'y', 'z', 'red', 'green', 'blue', 'label', 'base', 'distance'])
         params.base_I[b] = I
         I += 1    
 
@@ -407,4 +408,4 @@ if __name__ == '__main__':
             stem = stem.loc[~stem.duplicated()]
             ply_io.write_ply(os.path.join(params.odir, f'{params.n:03}_T{I}.leafon.ply'), 
                              stem[['x', 'y', 'z', 'red', 'green', 'blue', 
-                                   'label', 'sp', 'base', 'wood', 'distance']])
+                                   'label', 'base', 'wood', 'distance']])

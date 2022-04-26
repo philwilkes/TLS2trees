@@ -4,7 +4,7 @@ This repository describes methods to extract individual trees from TLS point clo
 
 ### 1. rxp-pipeline
 
-This step preprocesses data captured with RIEGL VZ TLS data. Code and details can be found here 
+This step preprocesses data captured with RIEGL VZ TLS data. Code and details can be found [here](https://github.com/philwilkes/rxp-pipeline). 
 
 ### 2. FSCT _lite_
 

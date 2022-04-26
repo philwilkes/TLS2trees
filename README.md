@@ -8,7 +8,7 @@ This step preprocesses data captured with RIEGL VZ TLS data. Code and details ca
 
 ### 2. FSCT _lite_
 
-This repo is forked from @SKrisanski and is a _lite_ version that only runs the semantic segmentation (ground, wood, leaf, cwd). Typical usage is:
+This repo is forked from [@SKrisanski](https://github.com/SKrisanski/FSCT) and is a _lite_ version that only runs the semantic segmentation (ground, wood, leaf, cwd). Typical usage is:
 
 `python run.py -p <point_cloud> --tile-index <path_to_index> --buffer <buffer> --verbose`
 

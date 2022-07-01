@@ -65,7 +65,7 @@ def SemanticSegmentation(params):
 
     # initialise model
     model = Net(num_classes=4).to(params.device)
-    model.load_state_dict(torch.load(params.model_filename, map_location=params.device), strict=False)
+    model.load_state_dict(torch.load(params.model, map_location=params.device), strict=False)
     model.eval()
 
     with torch.no_grad():

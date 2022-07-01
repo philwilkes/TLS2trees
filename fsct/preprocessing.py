@@ -64,8 +64,8 @@ def Preprocessing(params):
                          total=len(neighbours)-1,
                          desc='buffering tile with neighbouring points',
                          disable=False if params.verbose else True):
-            fname = glob.glob(os.path.join(params.directory, f'*{tile.fname:03}*{params.input_format}'))[0]
-            buffer = buffer.append(load_file(os.path.join(params.directory, fname)))
+            fname = glob.glob(os.path.join(params.directory, f'*{tile.fname:03}*{params.input_format}'))
+            if len(fname) > 0: buffer = buffer.append(load_file(os.path.join(params.directory, fname[0])))
 
         # select desired points
         buffer = buffer.loc[(buffer.x.between(params.pc.x.min() - params.buffer, 

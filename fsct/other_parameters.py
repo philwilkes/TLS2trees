@@ -4,7 +4,7 @@ import fsct
 
 # Don't change these unless you really understand what you are doing with them/are learning the code base.
 # These have been tuned to work on most high resolution forest point clouds without changing them.
-other_parameters = dict(model_filename=os.path.join(fsct.__path__[0], 'model', 'model.pth'),
+other_parameters = dict(model=os.path.join(fsct.__path__[0], 'model', 'model.pth'),
                         box_dims=np.array([6, 6, 8]),
                         box_overlap=np.array([0.5, 0.5, 0.25]),
                         min_points_per_box=1000,

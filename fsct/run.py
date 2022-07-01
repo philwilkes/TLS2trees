@@ -30,6 +30,8 @@ if __name__ == '__main__':
     parser.add_argument('--num_procs', default=10, type=int, help="Number of CPU cores you want to use. If you run out of RAM, lower this.")
 
     parser.add_argument('--keep-npy', action='store_true', help="Keeps .npy files used for segmentation after inference is finished.")
+
+    parser.add_argument('--model', default=None, type=str, help='path to candidate model')
                            
     parser.add_argument('--output_fmt', default='ply', help="file type of output")
     parser.add_argument('--verbose', action='store_true', help="print stuff")
@@ -63,7 +65,10 @@ if __name__ == '__main__':
             setattr(params, k, v)
     else:
         for k, v in other_parameters.items():
-            setattr(params, k, v)
+            if k == 'model' and params.model != None:
+                setattr(params, k, params.model)
+            else:
+                setattr(params, k, v)
         # i.e. if running for the first time - 
         # hack to add to params where used for 
         # recording which steps have been completed
@@ -73,6 +78,8 @@ if __name__ == '__main__':
         for k in params.steps_completed.keys():
             if k >= params.redo:
                     params.steps_completed[k] = False
+    
+
 
     if params.verbose:
         print('\n---- parameters used ----')

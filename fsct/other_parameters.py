@@ -21,6 +21,7 @@ other_parameters = dict(model=os.path.join(fsct.__path__[0], 'model', 'model.pth
                         slice_increment=0.05,
                         subsample=True,
                         subsampling_min_spacing=0.01,
+                        is_wood=1,
                         min_tree_cyls=10, 
                         max_distance_between_tiles=np.inf)
 

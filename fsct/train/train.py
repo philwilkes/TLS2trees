@@ -185,7 +185,7 @@ def run_training(params):
         drop_last=True,
     )
 
-    if params.perform_validation_during_training:
+    if params.validate:
         validation_dataset = ValidationDataset(params)
 
         validation_loader = DataLoader(
@@ -261,7 +261,7 @@ def run_training(params):
         if params.verbose: print(f'Train epoch accuracy: {np.around(epoch_acc, 4)} Loss: {np.around(epoch_loss, 4)}\n')
 
         # VALIDATION
-        if params.perform_validation_during_training:
+        if params.validate:
             if params.verbose: print("Validation")
             model.eval()
             running_loss = 0.0
@@ -317,7 +317,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--train', '-t', nargs='*', default='', type=str, help='path to training point cloud')
-    parser.add_argument('--validate', '-v', nargs='*', default='', type=str, help='path to validation point clouds')
+    parser.add_argument('--validate', '-v', nargs='*', default=False, type=str, help='path to validation point clouds')
     parser.add_argument('--chunks-dir', default='', type=str, help='path to chunks directory')
     
     parser.add_argument('--label', default='label', type=str, help='name of "label" field in input')
@@ -364,9 +364,11 @@ if __name__ == '__main__':
         else: 
             params.chunks_dir = params.save_chunks_to
         params.dtrain = os.path.join(params.chunks_dir, 'train')
-        params.dvalidate = os.path.join(params.chunks_dir, 'validate')
         preprocessing_setup(params.train, params.dtrain, params)
-        preprocessing_setup(params.validate, params.dvalidate, params)
+        
+        if params.validate:
+            params.dvalidate = os.path.join(params.chunks_dir, 'validate')
+            preprocessing_setup(params.validate, params.dvalidate, params)
                           
     params.out = os.path.splitext(params.model)[0]
 

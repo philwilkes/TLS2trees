@@ -38,7 +38,7 @@ optional arguments:
 
 Following classification an instance segmenation can be run to seperate individual trees using:
 
-`pytohn points2trees.py -t 001.downsample.segmented.ply --tindex ../tile_index.dat -o ../tmp/ --n-tiles 5 --slice-thickness .5 --find-stems-height 2 --find-stems-thickness .5 --pandarallel --verbose --add-leaves --add-leaves-voxel-length .5 --graph-maximum-cumulative-gap 3 --save-diameter-class --ignore-missing-tiles`
+`python points2trees.py -t 001.downsample.segmented.ply --tindex ../tile_index.dat -o ../tmp/ --n-tiles 5 --slice-thickness .5 --find-stems-height 2 --find-stems-thickness .5 --pandarallel --verbose --add-leaves --add-leaves-voxel-length .5 --graph-maximum-cumulative-gap 3 --save-diameter-class --ignore-missing-tiles`
 
 ```
 optional arguments:

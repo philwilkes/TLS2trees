@@ -1,21 +1,20 @@
-from sklearn.neighbors import NearestNeighbors
-import numpy as np
-import glob
-from sklearn.neighbors import NearestNeighbors
-from multiprocessing import Pool, get_context
-import pandas as pd
 import os
 import shutil
-from sklearn.cluster import DBSCAN
-from scipy.interpolate import griddata
-from copy import deepcopy
-from multiprocessing import get_context
-from scipy import spatial
+import glob
 import string
 import struct
-from scipy import ndimage
+import itertools
+import threading
 
-import laspy
+import numpy as np
+import pandas as pd
+from scipy import spatial
+from sklearn.neighbors import NearestNeighbors
+from sklearn.cluster import DBSCAN
+from scipy.interpolate import griddata
+from scipy import ndimage
+from tqdm import tqdm
+
 from fsct.io import ply_io, pcd_io
 
 class dict2class:
@@ -66,7 +65,7 @@ def voxelise(tmp, length, method='random', z=True):
     elif method == 'bytes':
         
         code = lambda row: np.array([row.xx, row.yy] + [row.zz] if z else []).tobytes()
-        tmp.loc[:, 'VX'] = self.pc.apply(code, axis=1)
+        tmp.loc[:, 'VX'] = tmp.apply(code, axis=1)
         
     else:
         raise Exception('method {} not recognised: choose "random" or "bytes"')
@@ -143,6 +142,9 @@ def load_file(filename, additional_headers=False, verbose=False):
     headers = ['x', 'y', 'z']
 
     if file_extension == '.las' or file_extension == '.laz':
+
+        import laspy
+
         inFile = laspy.read(filename)
         pc = np.vstack((inFile.x, inFile.y, inFile.z))
         #for header in additional_fields:
@@ -223,22 +225,6 @@ def save_file(filename, pointcloud, additional_fields=[], verbose=False):
         ply_io.write_ply(filename, pointcloud[cols])
         print("Saved to:", filename)
 
-def low_resolution_hack_mode(point_cloud, num_iterations, min_spacing, num_procs):
-    print('Using low resolution point cloud hack mode...')
-    print('Original point cloud shape:', point_cloud.shape)
-    point_cloud_original = deepcopy(point_cloud)
-    for i in range(num_iterations):
-        duplicated = deepcopy(point_cloud_original)
-
-        duplicated[:, :3] = duplicated[:, :3] + np.hstack(
-                (np.random.normal(-0.025, 0.025, size=(duplicated.shape[0], 1)),
-                 np.random.normal(-0.025, 0.025, size=(duplicated.shape[0], 1)),
-                 np.random.normal(-0.025, 0.025, size=(duplicated.shape[0], 1))))
-        point_cloud = np.vstack((point_cloud, duplicated))
-        point_cloud = subsample_point_cloud(point_cloud, min_spacing, num_procs)
-    print('Hacked point cloud shape:', point_cloud.shape)
-    return point_cloud
-
 def make_dtm(params):
     
     """ 
@@ -281,3 +267,51 @@ def make_dtm(params):
     
     return params
 
+
+def chunk_pc(pc, out_dir, params):
+
+    def save_pts(pc, I, bx, by, bz, working_dir, params):
+
+        pc = pc.loc[(pc.x.between(bx, bx + 6)) &
+                    (pc.y.between(by, by + 6)) &
+                    (pc.z.between(bz, bz + 6))]
+
+        if len(pc) > 1000:
+
+            if len(pc) > 20000:
+                pc = pc.sample(n=20000)
+
+            np.save(os.path.join(working_dir, f'{I:07}'), pc[['x', 'y', 'z', 'label']].values)
+    
+    if not os.path.isdir(out_dir): os.makedirs(out_dir)
+    
+    # apply global shift
+    pc[['x', 'y', 'z']] = pc[['x', 'y', 'z']] - pc[['x', 'y', 'z']].mean()
+
+    pc.reset_index(inplace=True)
+    pc.loc[:, 'pid'] = pc.index
+
+    # generate bounding boxes
+    xmin, xmax = np.floor(pc.x.min()), np.ceil(pc.x.max())
+    ymin, ymax = np.floor(pc.y.min()), np.ceil(pc.y.max())
+    zmin, zmax = np.floor(pc.z.min()), np.ceil(pc.z.max())
+
+    box_dims=6
+    box_overlap=0.5
+    
+    box_overlap = box_dims * box_overlap
+
+    x_cnr = np.arange(xmin - box_overlap, xmax + box_overlap, box_overlap)
+    y_cnr = np.arange(ymin - box_overlap, ymax + box_overlap, box_overlap)
+    z_cnr = np.arange(zmin - box_overlap, zmax + box_overlap, box_overlap)
+    
+    # multithread segmenting points into boxes and save
+    threads = []
+    for i, (bx, by, bz) in enumerate(itertools.product(x_cnr, y_cnr, z_cnr)):
+        threads.append(threading.Thread(target=save_pts, args=(pc, i, bx, by, bz, out_dir, params)))
+
+    for x in tqdm(threads, desc='generating data blocks', disable=False if params.verbose else True):
+        x.start()
+
+    for x in threads:
+        x.join()

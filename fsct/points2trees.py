@@ -1,10 +1,6 @@
 import os
-import time
-import threading
-import itertools
 import multiprocessing
 import argparse
-import string
 
 import numpy as np
 import pandas as pd
@@ -22,55 +18,52 @@ import warnings
 warnings.filterwarnings('ignore')
 pd.options.mode.chained_assignment = None
 
-def generate_path(samples, skeleton, params):
-    
-    if not isinstance(skeleton.dbh_node.dtype, bool):
-        skeleton.dbh_node = skeleton.dbh_node.astype(bool)
+def generate_path(samples, origins, n_neighbours=200, max_length=0):
 
-    if len(skeleton.loc[skeleton.dbh_node == 1]) > 0:
-        ### build graph ###
-        # compute nearest neighbours for each vertex in cluster convex hull
-        num_neighbours = 50
-        nn = NearestNeighbors(n_neighbors=num_neighbours).fit(samples[['x', 'y', 'z']])
-        distances, indices = nn.kneighbors()    
-        from_to_all = pd.DataFrame(np.vstack([np.repeat(samples.clstr.values, num_neighbours), 
+    # compute nearest neighbours for each vertex in cluster convex hull
+    nn = NearestNeighbors(n_neighbors=n_neighbours).fit(samples[['x', 'y', 'z']])
+    distances, indices = nn.kneighbors()    
+    from_to_all = pd.DataFrame(np.vstack([np.repeat(samples.clstr.values, n_neighbours), 
                                           samples.iloc[indices.ravel()].clstr.values, 
                                           distances.ravel()]).T, 
-                                   columns=['source', 'target', 'length'])
+                               columns=['source', 'target', 'length'])
 
-        # remove X-X connections
-        from_to_all = from_to_all.loc[from_to_all.target != from_to_all.source]
-        # and build edge database where edges with min distance between clusters persist
-        edges = from_to_all.groupby(['source', 'target']).length.min().reset_index()
-        # remove edges that are likely leaps between trees
-        edges = edges.loc[edges.length <= params.graph_edge_length]
-        #edges = edges.loc[edges.length <= .5]
-        
-        stems_in_tile = list(skeleton.loc[(skeleton.dbh_node)].clstr)
-        # removes isolated dbh points i.e. > edge.length
-        stems_in_tile = [s for s in stems_in_tile if s in edges.source.values] 
+    # remove X-X connections
+    from_to_all = from_to_all.loc[from_to_all.target != from_to_all.source]
 
-        # compute graph
-        G = nx.from_pandas_edgelist(edges, edge_attr=['length'])
-        distance, shortest_path = nx.multi_source_dijkstra(G, 
-                                                           sources=stems_in_tile,
-                                                           weight='length')
+    # and build edge database where edges with min distance between clusters persist
+    edges = from_to_all.groupby(['source', 'target']).length.min().reset_index()
+    # remove edges that are likely leaps between trees
+    edges = edges.loc[edges.length <= max_length]
 
-        paths = pd.DataFrame(index=distance.keys(), data=distance.values(), columns=['distance'])
-        paths.loc[:, 'base'] = params.not_base
-        for p in paths.index: paths.loc[p, 'base'] = shortest_path[p][0]
-        paths.reset_index(inplace=True)
-        
-        return paths
-        
-    else: 
-        return pd.DataFrame(columns=['index', 'distance', 'base'])
+    # removes isolated origin points i.e. > edge.length
+    origins = [s for s in origins if s in edges.source.values] 
 
+    # compute graph
+    G = nx.from_pandas_edgelist(edges, edge_attr=['length'])
+    distance, shortest_path = nx.multi_source_dijkstra(G, 
+                                                       sources=origins,
+                                                       weight='length')
+
+    paths = pd.DataFrame(index=distance.keys(), data=distance.values(), columns=['distance'])
+    paths.loc[:, 'base'] = params.not_base
+    for p in paths.index: paths.loc[p, 'base'] = shortest_path[p][0]
+    paths.reset_index(inplace=True)
+    paths.columns = ['clstr', 'distance', 't_clstr']
     
-def unique_cluster_id(clstr):
-    
-    gen_tclstr = lambda: ''.join(np.random.choice(list(string.ascii_letters), size=8))
-    return {c:gen_tclstr() for c in clstr}
+    # identify nodes that are branch tips
+    node_occurance = {}
+    for v in shortest_path.values():
+        for n in v:
+            if n in node_occurance.keys(): node_occurance[n] += 1
+            else: node_occurance[n] = 1
+
+    tips = [k for k, v in node_occurance.items() if v == 1]
+
+    paths.loc[:, 'is_tip'] = False
+    paths.loc[paths.clstr.isin(tips), 'is_tip'] = True
+
+    return paths
 
 
 def cube(pc):
@@ -90,24 +83,25 @@ if __name__ == '__main__':
     parser.add_argument('--odir', '-o', type=str, required=True, help='output directory')
     parser.add_argument('--tindex', type=str, required=True, help='path to tile index')
     parser.add_argument('--n-tiles', default=3, type=int, help='enlarges the number of tiles i.e. 3x3 or tiles or 5 x 5 tiles')
-    parser.add_argument('--n-prcs', default=5, type=int, help='number of cores')
     parser.add_argument('--overlap', default=False, type=float, help='buffer to crop adjacent tiles')
     parser.add_argument('--slice-thickness', default=.2, type=float, help='slice thickness for constructing graph')
     parser.add_argument('--find-stems-height', default=1.5, type=float, help='height for identifying stems')    
     parser.add_argument('--find-stems-thickness', default=.5, type=float, help='thickness of slice used for identifying stems')
     parser.add_argument('--find-stems-min-radius', default=.025, type=float, help='minimum radius of found stems')
     parser.add_argument('--find-stems-min-points', default=200, type=int, help='minimum number of points for found stems')
-    parser.add_argument('--graph-edge-length', default=.2, type=float, help='maximum distance used to connect points in graph')
+    parser.add_argument('--graph-edge-length', default=1, type=float, help='maximum distance used to connect points in graph')
+    parser.add_argument('--graph-maximum-cumulative-gap', default=np.inf, type=float, 
+                        help='maximum cumulative distance between a base and a cluster')
     parser.add_argument('--min-points-per-tree', default=0, type=int, help='minimum number of points for a identified tree')
     parser.add_argument('--add-leaves', action='store_true', help='add leaf points')
-    parser.add_argument('--add-leaves-voxel-length', default=.2, type=float, help='voxel sixe when add leaves')
+    parser.add_argument('--add-leaves-voxel-length', default=.5, type=float, help='voxel sixe when add leaves')
+    parser.add_argument('--add-leaves-edge-length', default=1, type=float, 
+                        help='maximum distance used to connect points in leaf graph')
+    parser.add_argument('--save-diameter-class', action='store_true', help='save into dimater class directories')
     parser.add_argument('--ignore-missing-tiles', action='store_true', help='ignore missing neighbouring tiles')
     parser.add_argument('--pandarallel', action='store_true', help='use pandarallel')
     parser.add_argument('--verbose', action='store_true', help='print something')
     params = parser.parse_args()
-
-    if params.tile == '':
-        raise Exception('specify --tile')  
         
     if params.pandarallel:
         try:
@@ -122,12 +116,11 @@ if __name__ == '__main__':
         for k, v in params.__dict__.items():
             print(f'{k:<35}{v}')
 
-    params.not_base = -1  
+    params.not_base = -1
     xyz = ['x', 'y', 'z'] # shorthand
 
     params.dir, params.fn = os.path.split(params.tile)
     params.n = int(params.fn.split('.')[0])
-#     params.tmp = glob.glob(os.path.join(params.dir, f'{params.n:03}.*.tmp'))[0]
 
     params.pc = ply_io.read_ply(params.tile)
     params.pc.loc[:, 'buffer'] = False
@@ -161,7 +154,6 @@ if __name__ == '__main__':
             if len(tmp) == 0: continue
             tmp.loc[:, 'buffer'] = True
             tmp.loc[:, 'fn'] = t
-
             params.pc = params.pc.append(tmp, ignore_index=True)
         except:
             path = os.path.join(params.dir, f'{t:03}*.ply')
@@ -169,8 +161,14 @@ if __name__ == '__main__':
                 print(f'tile {path} not available')
             else:
                 raise Exception(f'tile {path} not available')
-        
+    
+    # --- this can be dropeed soon --- 
     if 'nz' in params.pc.columns: params.pc.rename(columns={'nz':'n_z'}, inplace=True)
+        
+    # save space
+    params.pc = params.pc[[c for c in ['x', 'y', 'z', 'n_z', 'label', 'buffer', 'fn']]]
+    params.pc[['x', 'y', 'z', 'n_z']] = params.pc[['x', 'y', 'z', 'n_z']].astype(np.float32)
+    params.pc[['label', 'fn']] = params.pc[['label', 'fn']].astype(np.int16)
 
     ### generate skeleton points
     if params.verbose: print('\n----- skeletonisation started -----')
@@ -249,8 +247,7 @@ if __name__ == '__main__':
             # identify clusters where cylinder CV <= .75 and label as nodes
             skeleton.loc[skeleton.clstr.isin(dbh_cylinder.loc[(dbh_cylinder.radius > params.find_stems_min_radius) &
                                                               (dbh_cylinder.cnt > params.find_stems_min_points) &
-                                                              (dbh_cylinder.CV <= .15)]
-                                             .index.values), 'dbh_node'] = True
+                                                              (dbh_cylinder.CV <= .15)].index.values), 'dbh_node'] = True
 
     in_tile_stem_nodes = skeleton.loc[(skeleton.dbh_node) & 
                                       (skeleton.x.between(bbox.xmin, bbox.xmax)) &
@@ -258,59 +255,83 @@ if __name__ == '__main__':
     
     # generates paths through all stem points
     if params.verbose: print('generating graph, this may take a while...')
-    all_paths = generate_path(chull, skeleton, params)
+    wood_paths = generate_path(chull, 
+                               skeleton.loc[skeleton.dbh_node].clstr, 
+                               n_neighbours=200, 
+                               max_length=params.graph_edge_length)
 
     # removes paths that are longer for same clstr
-    all_paths = all_paths.sort_values(['index', 'distance'])
-    all_paths = all_paths.loc[~all_paths['index'].duplicated()] 
+    wood_paths = wood_paths.sort_values(['clstr', 'distance'])
+    wood_paths = wood_paths.loc[~wood_paths['clstr'].duplicated()] 
+    
+    # remove clusters that are linked to a base by a cumulative
+    # distance greater than X 
+    wood_paths = wood_paths.loc[wood_paths.distance <= params.graph_maximum_cumulative_gap]
 
     if params.verbose: print('merging skeleton points with graph')
-    stems = pd.merge(skeleton, all_paths, left_on='clstr', right_on='index', how='left')
+    stems = pd.merge(skeleton, wood_paths, on='clstr', how='left')
 
     # give a unique colour to each tree (helps with visualising)
     stems.drop(columns=[c for c in stems.columns if c.startswith('red') or 
                                                     c.startswith('green') or 
                                                     c.startswith('blue')], inplace=True)
-    unique_stems = stems.base.unique()
+
+    # generate unique RGB for each stem
+    unique_stems = stems.t_clstr.unique()
     RGB = pd.DataFrame(data=np.vstack([unique_stems, 
                                        np.random.randint(0, 255, size=(3, len(unique_stems)))]).T, 
-                       columns=['base', 'red', 'green', 'blue'])
-    RGB.loc[RGB.base == params.not_base, :] = [np.nan, 211, 211, 211] # color unassigned points grey
-    stems = pd.merge(stems, RGB, on='base', how='right')
+                       columns=['t_clstr', 'red', 'green', 'blue'])
+    RGB.loc[RGB.t_clstr == params.not_base, :] = [np.nan, 211, 211, 211] # color unassigned points grey
+    stems = pd.merge(stems, RGB, on='t_clstr', how='right')
 
     # read in all "stems" tiles and assign all stem points to a tree
     trees = pd.merge(stem_pc, 
-                     stems[['clstr', 'base', 'red', 'green', 'blue', 'distance']], 
+                     stems[['clstr', 't_clstr', 'distance', 'red', 'green', 'blue']], 
                      on='clstr')
-    trees.loc[:, 'cnt'] = trees.groupby('base').base.transform('count')
+    trees.loc[:, 'cnt'] = trees.groupby('t_clstr').t_clstr.transform('count')
     trees = trees.loc[trees.cnt > params.min_points_per_tree]
-    in_tile_stem_nodes = trees.loc[trees.base.isin(in_tile_stem_nodes)].base.unique()
+    in_tile_stem_nodes = trees.loc[trees.t_clstr.isin(in_tile_stem_nodes)].t_clstr.unique()
 
     # write out all trees
     params.base_I, I = {}, 0
-    for i, b in tqdm(enumerate(in_tile_stem_nodes), 
+    for i, b in tqdm(enumerate(dbh_cylinder.loc[in_tile_stem_nodes].sort_values('radius', ascending=False).index), 
                      total=len(in_tile_stem_nodes), 
                      desc='writing stems to file', 
                      disable=False if params.verbose else True):
-        if b == params.not_base: continue
-        ply_io.write_ply(os.path.join(params.odir, f'{params.n:03}_T{I}.leafoff.ply'), trees.loc[trees.base == b])
+
+        if b == params.not_base: 
+            continue
+    
+        if params.save_diameter_class:
+            d_dir = f'{(dbh_cylinder.loc[b].radius * 2 // .1) / 10:.1f}'
+            if not os.path.isdir(os.path.join(params.odir, d_dir)):
+                os.makedirs(os.path.join(params.odir, d_dir))
+            ply_io.write_ply(os.path.join(params.odir, d_dir, f'{params.n:03}_T{I}.leafoff.ply'), 
+                             trees.loc[trees.t_clstr == b])  
+        else:
+            ply_io.write_ply(os.path.join(params.odir, f'{params.n:03}_T{I}.leafoff.ply'), 
+                             trees.loc[trees.t_clstr == b])
         params.base_I[b] = I
-        I += 1    
+        I += 1  
 
     if params.add_leaves:
         
         if params.verbose: print('adding leaves to stems, this may take a while...')
 
         # link stem number to clstr
-        stem2tlsctr = stems[['clstr', 'base']].loc[stems.base != params.not_base].set_index('clstr').to_dict()['base']
+        stem2tlsctr = stems[['clstr', 't_clstr']].loc[stems.t_clstr != params.not_base].set_index('clstr').to_dict()['t_clstr']
         chull.loc[:, 'stem'] = chull.clstr.map(stem2tlsctr)
 
         # identify unlabelled woody points to add back to leaves
         unlabelled_wood = chull.loc[[True if np.isnan(s) else False for s in chull.stem]]
         unlabelled_wood = stem_pc.loc[stem_pc.clstr.isin(unlabelled_wood.clstr.to_list() + [-1])]
 
-        # extract wood points that are attributed to a base
+        # extract wood points that are attributed to a base and that are the 
+        # the last clstr of the graph i.e. a tip
+        is_tip = wood_paths.set_index('clstr')['is_tip'].to_dict()
         chull = chull.loc[[False if np.isnan(s) else True for s in chull.stem]]
+        chull.loc[:, 'is_tip'] = chull.clstr.map(is_tip)
+        chull = chull.loc[(chull.is_tip) & (chull.n_z > params.find_stems_height)]
         chull.loc[:, 'xlabel'] = 2
 
         # process leaf points
@@ -319,92 +340,84 @@ if __name__ == '__main__':
         lvs.reset_index(inplace=True)
 
         # voxelise
-        lvs = voxelise(lvs, length=.5)
-        lvs_median = lvs.groupby('VX')[xyz].median().reset_index()
-        lvs_median.loc[:, 'xlabel'] = 1
+        lvs = voxelise(lvs, length=params.add_leaves_voxel_length)
+        lvs_gb = lvs.groupby('VX')[xyz]
+        lvs_min = lvs_gb.min()
+        lvs_max = lvs_gb.max()
+        lvs_med = lvs_gb.median()
+
+        # find faces of leaf voxels and create database 
+        cnrs = np.vstack([lvs_min.x, lvs_med.y, lvs_med.z]).T
+        clstr = np.tile(np.arange(len(lvs_min.index)) + 1 + chull.clstr.max(), 6)
+        VX = np.tile(lvs_min.index, 6)
+        cnrs = np.vstack([cnrs, np.vstack([lvs_max.x, lvs_med.y, lvs_med.z]).T])
+        cnrs = np.vstack([cnrs, np.vstack([lvs_med.x, lvs_min.y, lvs_med.z]).T])
+        cnrs = np.vstack([cnrs, np.vstack([lvs_med.x, lvs_max.y, lvs_med.z]).T])
+        cnrs = np.vstack([cnrs, np.vstack([lvs_med.x, lvs_med.y, lvs_min.z]).T])
+        cnrs = np.vstack([cnrs, np.vstack([lvs_med.x, lvs_med.y, lvs_max.z]).T])
+        cnrs = pd.DataFrame(cnrs, columns=['x', 'y', 'z'])
+        cnrs.loc[:, 'xlabel'] = 1
+        cnrs.loc[:, 'clstr'] = clstr
+        cnrs.loc[:, 'VX'] = VX
 
         # and combine leaves and wood
-        branch_and_leaves = lvs_median.append(chull[['x', 'y', 'z', 'label', 'stem', 'xlabel']])
+        branch_and_leaves = cnrs.append(chull[['x', 'y', 'z', 'label', 'stem', 'xlabel', 'clstr']])
         branch_and_leaves.reset_index(inplace=True, drop=True)
 
         # find neighbouring branch and leaf points - used as entry points
         nn = NearestNeighbors(n_neighbors=2).fit(branch_and_leaves[xyz])
         distances, indices = nn.kneighbors()   
-        closest_point_to_leaf = indices[:len(lvs_median), :].flatten() # only leaf points
+        closest_point_to_leaf = indices[:len(cnrs), :].flatten() # only leaf points
         idx = np.isin(closest_point_to_leaf, branch_and_leaves.loc[branch_and_leaves.xlabel == 2].index)
         close_branch_points = closest_point_to_leaf[idx] # points where the branch is closest
 
         # remove all branch points that are not close to leaves
-        idx = np.hstack([branch_and_leaves.iloc[:len(lvs_median)].index.values, close_branch_points])
+        idx = np.hstack([branch_and_leaves.iloc[:len(cnrs)].index.values, close_branch_points])
         bal = branch_and_leaves.loc[branch_and_leaves.index.isin(np.unique(idx))]
 
-        # compute nearest neighbours for each vertex in cluster convex hull
-        num_neighbours = 200
-        nn = NearestNeighbors(n_neighbors=num_neighbours).fit(bal[xyz])
-        distances, indices = nn.kneighbors()    
-
-        from_to_all = pd.DataFrame(np.vstack([np.repeat(bal.index.values, num_neighbours), 
-                                              bal.iloc[indices.ravel()].index.values, 
-                                              distances.ravel()]).T, 
-                                   columns=['source', 'target', 'length'])
-
-        # remove X-X connections
-        from_to_all = from_to_all.loc[from_to_all.target != from_to_all.source]
-        # and build edge database where edges with min distance between clusters persist
-        edges = from_to_all.groupby(['source', 'target']).length.min().reset_index()
-        # remove edges that are likely leaps between trees
-        edges = edges.loc[edges.length <= params.add_leaves_voxel_length * 2]
-#         edges = edges.loc[edges.length <= 1]
-#         edges = edges.loc[edges.length <= .5]
-
-        # compute graph
-        G = nx.from_pandas_edgelist(edges, edge_attr=['length'])
-        cbp = np.unique(close_branch_points[np.isin(close_branch_points, edges.source.values)])
-
-        distance, shortest_path = nx.multi_source_dijkstra(G, 
-                                                           sources=list(cbp),
-                                                           weight='length')
-
-        # graph to df
-        paths = pd.DataFrame(index=distance.keys(), data=distance.values(), columns=['distance'])
-        paths = paths.reset_index().rename(columns={'index':'s_index'})
-        # for p in paths.index: paths.loc[p, 't_index'] = shortest_path[p][0]
-        paths.loc[:, 't_index'] = paths.s_index.apply(lambda ix: shortest_path[ix][0]) 
-        # paths.reset_index(inplace=True)
-        paths = paths.loc[paths.distance > 0]
+        # generate a leaf paths graph
+        leaf_paths = generate_path(bal, 
+                                   bal.loc[bal.xlabel == 2].clstr.unique(), 
+                                   max_length=1, # i.e. any leaves which are separated by greater are ignored
+                                   n_neighbours=20)
+             
+        leaf_paths = leaf_paths.sort_values(['clstr', 'distance'])
+        leaf_paths = leaf_paths.loc[~leaf_paths['clstr'].duplicated()] # removes duplicate paths
+        leaf_paths = leaf_paths.loc[leaf_paths.distance > 0] # removes within cluseter paths 
 
         # linking indexs to stem number
-        top2stem = branch_and_leaves.loc[branch_and_leaves.xlabel == 2]['stem'].to_dict()
-        paths.loc[:, 'stem_'] = paths.t_index.map(top2stem)
+        top2stem = branch_and_leaves.loc[branch_and_leaves.xlabel == 2].set_index('clstr')['stem'].to_dict()
+        leaf_paths.loc[:, 't_clstr'] = leaf_paths.t_clstr.map(top2stem)
         #     paths.loc[:, 'stem'] = paths.stem_.map(base2i)
 
         # linking index to VX number
-        index2VX = branch_and_leaves.loc[branch_and_leaves.xlabel == 1]['VX'].to_dict()
-        paths.loc[:, 'VX'] = paths['s_index'].map(index2VX)
-
-        # linking VX to stem
-        lvs = pd.merge(lvs, paths[['VX', 'stem_', 'distance']], on='VX')
+        index2VX = branch_and_leaves.loc[branch_and_leaves.xlabel == 1].set_index('clstr')['VX'].to_dict()
+        leaf_paths.loc[:, 'VX'] = leaf_paths['clstr'].map(index2VX)
 
         # colour the same as stem
-        lvs = pd.merge(lvs, RGB, left_on='stem_', right_on='base', )
-        lvs[['red', 'green', 'blue']] = (lvs[['red', 'green', 'blue']] * 1.2).astype(int)
-        lvs.loc[lvs.red > 255, 'red'] = 255
-        lvs.loc[lvs.blue > 255, 'blue'] = 255
-        lvs.loc[lvs.green > 255, 'green'] = 255
+        lvs = pd.merge(lvs, leaf_paths[['VX', 't_clstr', 'distance']], on='VX', how='left')
 
         # and save
-        for lv in lvs.loc[lvs.base.isin(in_tile_stem_nodes)].base.unique():
+        for lv in tqdm(in_tile_stem_nodes):
 
             I = params.base_I[lv]
 
-            stem = ply_io.read_ply(os.path.join(params.odir, f'{params.n:03}_T{I}.leafoff.ply'))
+            wood_fn = glob.glob(os.path.join(params.odir, '*', f'{params.n:03}_T{I}.leafoff.ply'))[0]
+
+            stem = ply_io.read_ply(os.path.join(wood_fn))
             stem.loc[:, 'wood'] = 1
 
-            l2a = lvs.loc[lvs.base == lv]
-            l2a.loc[:, 'wood'] = 0
-            stem = stem.append(l2a[['x', 'y', 'z', 'label', 'red', 'green', 'blue', 'base', 'wood', 'distance']])
+            l2a = lvs.loc[lvs.t_clstr == lv]
+            if len(l2a) > 0:
+                l2a.loc[:, 'wood'] = 0
+                
+                # colour the same as stem
+                rgb = RGB.loc[RGB.t_clstr == lv][['red', 'green', 'blue']].values[0] * 1.2
+                l2a.loc[:, ['red', 'green', 'blue']] = [c if c <= 255 else 255 for c in rgb]
+
+                stem = stem.append(l2a[['x', 'y', 'z', 'label', 'red', 'green', 'blue', 't_clstr', 'wood', 'distance']])
 
             stem = stem.loc[~stem.duplicated()]
-            ply_io.write_ply(os.path.join(params.odir, f'{params.n:03}_T{I}.leafon.ply'), 
-                             stem[['x', 'y', 'z', 'red', 'green', 'blue', 
-                                   'label', 'sp', 'base', 'wood', 'distance']])
+            ply_io.write_ply(wood_fn.replace('leafoff', 'leafon'), 
+                             stem[['x', 'y', 'z', 'red', 'green', 'blue', 'label', 't_clstr', 'wood', 'distance']])
+            if params.verbose: print(f"leaf on saved to: {wood_fn.replace('leafoff', 'leafon')}") 

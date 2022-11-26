@@ -30,7 +30,11 @@ if __name__ == '__main__':
     parser.add_argument('--num_procs', default=10, type=int, help="Number of CPU cores you want to use. If you run out of RAM, lower this.")
 
     parser.add_argument('--keep-npy', action='store_true', help="Keeps .npy files used for segmentation after inference is finished.")
-                           
+
+    parser.add_argument('--is-wood', default=1, type=float, help='a probability above which points are classified as wood')
+    parser.add_argument('--model', default=None, type=str, help='path to candidate model')
+    
+                       
     parser.add_argument('--output_fmt', default='ply', help="file type of output")
     parser.add_argument('--verbose', action='store_true', help="print stuff")
 
@@ -63,11 +67,16 @@ if __name__ == '__main__':
             setattr(params, k, v)
     else:
         for k, v in other_parameters.items():
-            setattr(params, k, v)
+            if k == 'model' and params.model != None:
+                setattr(params, k, params.model)
+            elif k == 'is_wood' and params.is_wood < 1:
+                setattr(params, k, params.is_wood)
+            else:
+                setattr(params, k, v)
         # i.e. if running for the first time - 
         # hack to add to params where used for 
         # recording which steps have been completed
-        params.steps_completed = {0:False, 1:False, 2:False, 3:False}
+        params.steps_completed = {0:False, 1:False}
 
     if params.redo != None:
         for k in params.steps_completed.keys():
@@ -91,8 +100,3 @@ if __name__ == '__main__':
         params = SemanticSegmentation(params)
         params.steps_completed[1] = True
         pickle.dump(params, open(os.path.join(params.odir, f'{params.basename}.params.pickle'), 'wb'))
-
-#    if params.step >= 2 and not params.steps_completed[2]:
-#        params = Segmentation(params)
-#        params.steps_completed[3] = True
-#        pickle.dump(params, open(os.path.join(params.odir, f'{params.basename}.params.pickle'), 'wb'))

@@ -65,7 +65,7 @@ def SemanticSegmentation(params):
 
     # initialise model
     model = Net(num_classes=4).to(params.device)
-    model.load_state_dict(torch.load(params.model_filename, map_location=params.device), strict=False)
+    model.load_state_dict(torch.load(params.model, map_location=params.device), strict=False)
     model.eval()
 
     with torch.no_grad():
@@ -104,6 +104,11 @@ def SemanticSegmentation(params):
     labels = np.zeros((params.pc.shape[0], 4))
     labels[:, :4] = np.median(classified_pc[indices][:, :, -4:], axis=1)
     params.pc.loc[params.pc.index, 'label'] = np.argmax(labels[:, :4], axis=1)
+    
+    # attribute points as wood if any points have
+    # a wood probability > params.is_wood (Morel et al. 2020)
+    is_wood = np.any(classified_pc[indices][:, :, -1] > params.is_wood, axis=1)
+    params.pc.loc[is_wood, 'label'] = 3
 
     probs = pd.DataFrame(index=params.pc.index, data=labels[:, :4], columns=['pTerrain', 'pLeaf', 'pCWD', 'pWood'])
     params.pc = params.pc.join(probs)

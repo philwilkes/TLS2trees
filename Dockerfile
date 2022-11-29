@@ -22,9 +22,11 @@ RUN	cd /usr/local/cuda-11.3/lib64/ && \
 # Install requirements using pip
 RUN pip install -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
+# Make sure scripts are excecutable
+RUN chmod a+x /opt/fsct/run.py /opt/fsct/points2trees.py
+
 # Set environmental variables
 ENV  LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda-11.3/lib:/usr/local/cuda-11.3/lib64:/usr/local/cuda/compat
 ENV PYTHONPATH=/opt/:$PYTHONPATH
+ENV PATH=/opt/fsct:$PATH
 
-# Run the main script for FSCT
-ENTRYPOINT ["python3", "/opt/fsct/run.py"]

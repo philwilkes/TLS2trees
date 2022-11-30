@@ -77,3 +77,25 @@ optional arguments:
   --verbose             print something
 ```
 
+## Docker
+
+To build a Docker container with all the libraries installed use:
+```
+docker build -t tls2trees:latest .
+```
+Then to run FSCT and the instance segmentation use:
+```
+docker run -it -v /path/to/data/outsidecontainer:/path/to/data/incontainer fsct:latest run.py
+docker run -it -v /path/to/data/outsidecontainer:/path/to/data/incontainer fsct:latest points2trees.py
+```
+
+For HPC systems, where you don't have permission to run Docker, you can build the container on your local machine and convert to a singularity file using:
+
+```
+sudo singularity build tls2trees_latest.sif docker-daemon://tls2trees:latest
+```
+Copy this to the HPC system and run this using
+```
+singularity exec tls2trees_latest.sif run.py
+singularity exec tls2trees_latest.sif points2trees.py
+```

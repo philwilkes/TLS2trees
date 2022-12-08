@@ -94,10 +94,10 @@ if __name__ == '__main__':
                         help='maximum cumulative distance between a base and a cluster')
     parser.add_argument('--min-points-per-tree', default=0, type=int, help='minimum number of points for a identified tree')
     parser.add_argument('--add-leaves', action='store_true', help='add leaf points')
-    parser.add_argument('--add-leaves-voxel-length', default=.5, type=float, help='voxel sixe when add leaves')
+    parser.add_argument('--add-leaves-voxel-length', default=.5, type=float, help='voxel size when add leaves')
     parser.add_argument('--add-leaves-edge-length', default=1, type=float, 
                         help='maximum distance used to connect points in leaf graph')
-    parser.add_argument('--save-diameter-class', action='store_true', help='save into dimater class directories')
+    parser.add_argument('--save-diameter-class', action='store_true', help='save into diameter class directories')
     parser.add_argument('--ignore-missing-tiles', action='store_true', help='ignore missing neighbouring tiles')
     parser.add_argument('--pandarallel', action='store_true', help='use pandarallel')
     parser.add_argument('--verbose', action='store_true', help='print something')

@@ -106,7 +106,7 @@ if __name__ == '__main__':
     if params.pandarallel:
         try:
             from pandarallel import pandarallel
-            pandarallel.initialize(progress_bar=True if params.verbose else False)
+            pandarallel.initialize(progress_bar=True if params.verbose else False, use_memory_fs=False)
         except:
             print('--- pandarallel not installed ---')
             params.pandarallel = False

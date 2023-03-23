@@ -125,6 +125,11 @@ if __name__ == '__main__':
     params.pc = ply_io.read_ply(params.tile)
     params.pc.loc[:, 'buffer'] = False
     params.pc.loc[:, 'fn'] = params.n
+    
+    # Shift to local coordinates from UTM
+    params.global_shift = params.pc[['x', 'y']].mean()
+    if params.verbose: print('global shift:', params.global_shift.values)
+    params.pc[['x', 'y']] -= params.global_shift
 
     bbox = {}
     bbox['xmin'], bbox['xmax'] = params.pc.x.min(), params.pc.x.max()
@@ -148,6 +153,10 @@ if __name__ == '__main__':
         try:
             b_tile = glob.glob(os.path.join(params.dir, f'{t:03}*.ply'))[0]
             tmp = ply_io.read_ply(b_tile)
+            
+            # Apply global shift to tile
+            tmp[['x', 'y']] -= params.global_shift
+            
             if params.overlap:
                 tmp = tmp.loc[(tmp.x.between(bbox.xmin - params.overlap, bbox.xmax + params.overlap)) & 
                               (tmp.y.between(bbox.ymin - params.overlap, bbox.ymax + params.overlap))]
@@ -288,6 +297,7 @@ if __name__ == '__main__':
     trees = pd.merge(stem_pc, 
                      stems[['clstr', 't_clstr', 'distance', 'red', 'green', 'blue']], 
                      on='clstr')
+    trees[['x', 'y']] += params.global_shift  # Shift back from local to UTM
     trees.loc[:, 'cnt'] = trees.groupby('t_clstr').t_clstr.transform('count')
     trees = trees.loc[trees.cnt > params.min_points_per_tree]
     in_tile_stem_nodes = trees.loc[trees.t_clstr.isin(in_tile_stem_nodes)].t_clstr.unique()
@@ -398,6 +408,7 @@ if __name__ == '__main__':
         lvs = pd.merge(lvs, leaf_paths[['VX', 't_clstr', 'distance']], on='VX', how='left')
 
         # and save
+        
         for lv in tqdm(in_tile_stem_nodes):
 
             I = params.base_I[lv]
@@ -407,6 +418,8 @@ if __name__ == '__main__':
             stem = ply_io.read_ply(os.path.join(wood_fn))
             stem.loc[:, 'wood'] = 1
 
+            stem[['x', 'y']] -= params.global_shift  # Shift from UTM to local
+            
             l2a = lvs.loc[lvs.t_clstr == lv]
             if len(l2a) > 0:
                 l2a.loc[:, 'wood'] = 0
@@ -418,6 +431,7 @@ if __name__ == '__main__':
                 stem = stem.append(l2a[['x', 'y', 'z', 'label', 'red', 'green', 'blue', 't_clstr', 'wood', 'distance']])
 
             stem = stem.loc[~stem.duplicated()]
+            stem[['x', 'y']] += params.global_shift  # Reset from local coords to UTM
             ply_io.write_ply(wood_fn.replace('leafoff', 'leafon'), 
                              stem[['x', 'y', 'z', 'red', 'green', 'blue', 'label', 't_clstr', 'wood', 'distance']])
             if params.verbose: print(f"leaf on saved to: {wood_fn.replace('leafoff', 'leafon')}") 

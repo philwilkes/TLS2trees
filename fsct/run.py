@@ -81,7 +81,7 @@ if __name__ == '__main__':
     if params.redo != None:
         for k in params.steps_completed.keys():
             if k >= params.redo:
-                    params.steps_completed[k] = False
+                params.steps_completed[k] = False
 
     if params.verbose:
         print('\n---- parameters used ----')

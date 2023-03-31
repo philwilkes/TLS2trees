@@ -1,21 +1,18 @@
+import glob
+import itertools
 import os
 import shutil
-import glob
 import string
-import struct
-import itertools
 import threading
 
+import laspy
 import numpy as np
 import pandas as pd
-from scipy import spatial
-from sklearn.neighbors import NearestNeighbors
-from sklearn.cluster import DBSCAN
-from scipy.interpolate import griddata
 from scipy import ndimage
 from tqdm import tqdm
 
-from fsct.io import ply_io, pcd_io
+from fsct.io import pcd_io, ply_io
+
 
 class dict2class:
 
@@ -31,7 +28,7 @@ def make_folder_structure(params):
     params.working_dir = os.path.join(params.odir, params.basename + '.tmp')
     
     if not os.path.isdir(params.odir):
-        os.makedirs(odir)
+        os.makedirs(params.odir)
 
     if not os.path.isdir(params.working_dir):
         os.makedirs(params.working_dir)

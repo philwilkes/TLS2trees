@@ -45,8 +45,8 @@ def other_cylinder_fit2(xyz, xm=0, ym=0, xr=0, yr=0, r=1):
 
 def RANSACcylinderFitting4(xyz_, iterations=50, plot=False):
     
-    if plot:
-        ax = plt.subplot(111)
+    #if plot:
+    #    ax = plt.subplot(111)
     
     bestFit, bestErr = None, np.inf
     xyz_mean = xyz_.mean(axis=0)
@@ -103,7 +103,8 @@ def RANSACcylinderFitting4(xyz_, iterations=50, plot=False):
     
     # for testing uncomment
     if plot:
-        
+       
+        ax = plot 
         radius, Centre, c, alsoInliers, MX = bestFit
 
         xyz_[['x', 'y', 'z']] = MX.apply(xyz_)
@@ -112,10 +113,12 @@ def RANSACcylinderFitting4(xyz_, iterations=50, plot=False):
 
         alsoInliers[['x', 'y', 'z']] += xyz_mean
         cbar = ax.scatter(alsoInliers.x, alsoInliers.y, s=10, c=alsoInliers.error)
-        plt.colorbar(cbar)
+        #ax.colorbar(cbar)
 
         ax.scatter(Centre[0], Centre[1], marker='+', s=100, c='r')
         ax.add_patch(c)
+        
+        return [radius, centre, bestErr, len(xyz_), ax] 
 
     return [radius, centre, bestErr, len(xyz_)]
 

@@ -1,7 +1,11 @@
+from datetime import datetime
+start = datetime.now()
+
 import sys
 import os
 import argparse
 import pickle
+import resource
 
 # from fsct.run_tools import FSCT
 from fsct.other_parameters import other_parameters
@@ -100,3 +104,6 @@ if __name__ == '__main__':
         params = SemanticSegmentation(params)
         params.steps_completed[1] = True
         pickle.dump(params, open(os.path.join(params.odir, f'{params.basename}.params.pickle'), 'wb'))
+    
+    if params.verbose: print(f'runtime: {(datetime.now() - start).seconds}')
+    if params.verbose: print(f'peak memory: {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6}')

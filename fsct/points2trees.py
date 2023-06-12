@@ -1,3 +1,7 @@
+import datetime
+start = datetime.datetime.now()
+import resource
+
 import os
 import multiprocessing
 import argparse
@@ -68,14 +72,15 @@ def generate_path(samples, origins, n_neighbours=200, max_length=0):
 
 def cube(pc):
     
-    if len(pc) > 5:
-        vertices = ConvexHull(pc[['x', 'y', 'z']]).vertices
-        idx = np.random.choice(vertices, size=len(vertices), replace=False)
-        return pc.loc[pc.index[idx]]
-    else:
-        return pc 
+    try:
+        if len(pc) > 5:
+            vertices = ConvexHull(pc[['x', 'y', 'z']]).vertices
+            idx = np.random.choice(vertices, size=len(vertices), replace=False)
+            return pc.loc[pc.index[idx]]
+    except:
+        pass
+    return pc 
     
-
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
@@ -325,6 +330,7 @@ if __name__ == '__main__':
         # identify unlabelled woody points to add back to leaves
         unlabelled_wood = chull.loc[[True if np.isnan(s) else False for s in chull.stem]]
         unlabelled_wood = stem_pc.loc[stem_pc.clstr.isin(unlabelled_wood.clstr.to_list() + [-1])]
+        unlabelled_wood = unlabelled_wood.loc[unlabelled_wood.n_z >= 2]
 
         # extract wood points that are attributed to a base and that are the 
         # the last clstr of the graph i.e. a tip
@@ -402,7 +408,9 @@ if __name__ == '__main__':
 
             I = params.base_I[lv]
 
-            wood_fn = glob.glob(os.path.join(params.odir, '*', f'{params.n:03}_T{I}.leafoff.ply'))[0]
+            wood_fn = glob.glob(os.path.join(params.odir, 
+                                             '*' if params.save_diameter_class else '', 
+                                             f'{params.n:03}_T{I}.leafoff.ply'))[0]
 
             stem = ply_io.read_ply(os.path.join(wood_fn))
             stem.loc[:, 'wood'] = 1
@@ -421,3 +429,6 @@ if __name__ == '__main__':
             ply_io.write_ply(wood_fn.replace('leafoff', 'leafon'), 
                              stem[['x', 'y', 'z', 'red', 'green', 'blue', 'label', 't_clstr', 'wood', 'distance']])
             if params.verbose: print(f"leaf on saved to: {wood_fn.replace('leafoff', 'leafon')}") 
+
+print(f'peak memory: {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6}')
+print(f'runtime: {(datetime.datetime.now() - start).seconds}')

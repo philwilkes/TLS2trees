@@ -11,7 +11,7 @@ import pandas as pd
 from scipy import ndimage
 from tqdm import tqdm
 
-from fsct.io import pcd_io, ply_io
+from tls2trees.io import pcd_io, ply_io
 
 
 class dict2class:

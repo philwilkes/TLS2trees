@@ -10,8 +10,8 @@ import warnings
 import networkx as nx
 import numpy as np
 import pandas as pd
-from fsct.fit_cylinders import RANSAC_helper
-from fsct.tools import *
+from fit_cylinders import RANSAC_helper
+from tools import *
 from scipy.spatial import ConvexHull
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import NearestNeighbors

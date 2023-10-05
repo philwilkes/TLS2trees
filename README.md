@@ -2,6 +2,10 @@
 
 This repository describes methods to extract individual trees from TLS point clouds. This is done using a 3-step process
 
+### 0. Setup
+
+From the repository's root directory, run `pip install -e .` to install the project as a local, editable module.
+
 ### 1. rxp-pipeline
 
 This step preprocesses data captured with RIEGL VZ TLS data. Code and details can be found [here](https://github.com/philwilkes/rxp-pipeline). 

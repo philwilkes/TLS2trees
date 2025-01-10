@@ -9,7 +9,7 @@ import resource
 
 # from fsct.run_tools import FSCT
 from fsct.other_parameters import other_parameters
-from fsct.tools import dict2class
+from tools import dict2class
 from fsct.preprocessing import Preprocessing
 from fsct.inference import SemanticSegmentation
 from fsct.segmentation import Segmentation
@@ -85,7 +85,7 @@ if __name__ == '__main__':
     if params.redo != None:
         for k in params.steps_completed.keys():
             if k >= params.redo:
-                    params.steps_completed[k] = False
+                params.steps_completed[k] = False
 
     if params.verbose:
         print('\n---- parameters used ----')

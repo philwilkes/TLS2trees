@@ -1,24 +1,22 @@
 import datetime
+
 start = datetime.datetime.now()
-import resource
-
-import os
-import multiprocessing
 import argparse
+import multiprocessing
+import os
+import resource
+import warnings
 
+import networkx as nx
 import numpy as np
 import pandas as pd
+from fit_cylinders import RANSAC_helper
+from tools import *
+from scipy.spatial import ConvexHull
+from sklearn.cluster import DBSCAN
+from sklearn.neighbors import NearestNeighbors
 from tqdm.auto import tqdm
 
-from sklearn.neighbors import NearestNeighbors
-from sklearn.cluster import DBSCAN
-from scipy.spatial import ConvexHull
-import networkx as nx
-
-from fsct.tools import *
-from fsct.fit_cylinders import RANSAC_helper
-
-import warnings
 warnings.filterwarnings('ignore')
 pd.options.mode.chained_assignment = None
 
